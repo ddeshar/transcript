@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Realtime English → Thai Subtitles</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>Realtime English → Thai Subtitles</h1>
+      <p class="subtitle">Speak in English, read subtitles in Thai instantly.</p>
+    </div>
+    <span id="statusChip" class="status status-idle">Idle</span>
+  </header>
+
+  <main class="app-main">
+    <section class="controls">
+      <div class="control-row">
+        <button id="startBtn" class="primary">Start</button>
+        <button id="stopBtn" disabled>Stop</button>
+        <button id="clearBtn">Clear</button>
+        <button id="saveBtn" disabled>Save (.txt)</button>
+      </div>
+      <div class="control-row secondary">
+        <label class="toggle">
+          <input type="checkbox" id="englishToggle" checked />
+          <span>Show English preview</span>
+        </label>
+        <div class="font-size">
+          <span>Caption size:</span>
+          <button data-size="s" class="size-btn">S</button>
+          <button data-size="m" class="size-btn active">M</button>
+          <button data-size="l" class="size-btn">L</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="captions" id="captions" data-size="m">
+      <div class="caption-line thai" id="thaiCaption">เริ่มเมื่อคุณกด Start</div>
+      <div class="caption-line english" id="englishCaption">English preview will appear here.</div>
+      <div class="history" id="history"></div>
+    </section>
+
+    <section class="log" id="log"></section>
+  </main>
+
+  <script src="/static/app.js" type="module"></script>
+</body>
+</html>
