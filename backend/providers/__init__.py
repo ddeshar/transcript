@@ -7,14 +7,18 @@ from .asr_base import ASRProvider
 from .asr_vosk import VoskASRProvider
 from .asr_whispercpp import WhisperCppASRProvider
 from .asr_cloud import WhisperCloudASRProvider
+from .asr_mock import MockASRProvider
 from .mt_base import MTProvider
 from .mt_marian import MarianMTProvider
 from .mt_gtranslate import GoogleTranslateProvider
 from .mt_awstranslate import AWSTranslateProvider
+from .mt_mock import MockMTProvider
 
 
 def create_asr_provider(name: str, *, base_dir: Path, settings: dict[str, str]) -> ASRProvider:
     name = name.lower()
+    if name == "mock":
+        return MockASRProvider()
     if name == "vosk":
         model_dir = Path(settings.get("VOSK_MODEL_DIR", base_dir / "models" / "vosk"))
         model_name = settings.get("VOSK_MODEL_NAME")
@@ -29,6 +33,8 @@ def create_asr_provider(name: str, *, base_dir: Path, settings: dict[str, str]) 
 
 def create_mt_provider(name: str, *, base_dir: Path, settings: dict[str, str]) -> MTProvider:
     name = name.lower()
+    if name == "mock":
+        return MockMTProvider()
     if name in {"marian", "opus"}:
         model_dir = Path(settings.get("MARIAN_MODEL_DIR", base_dir / "models" / "marian"))
         model_name = settings.get("MARIAN_MODEL_NAME", "Helsinki-NLP/opus-mt-en-th")

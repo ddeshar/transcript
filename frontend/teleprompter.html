@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Teleprompter</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <style>
+      body { background: #000; }
+      .teleprompter {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        color: #e6e6e6;
+      }
+      .tp-line {
+        width: min(1400px, 92vw);
+        line-height: 1.35;
+        letter-spacing: 0.2px;
+        text-align: center;
+        margin: 1.2rem 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        transition: opacity 160ms ease;
+      }
+      .tp-thai { font-weight: 700; font-size: clamp(2rem, 6vw, 4.25rem); }
+      .tp-english { opacity: 0.6; font-size: clamp(1.2rem, 3.5vw, 2rem); }
+      .toolbar {
+        position: fixed;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 8px;
+        background: rgba(20,20,20,0.7);
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.08);
+        backdrop-filter: blur(8px);
+      }
+      .toolbar input[type="checkbox"] { margin-left: 6px; }
+      .mirror { transform: scaleX(-1); }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <button id="startBtn" class="btn">Start</button>
+      <button id="stopBtn" class="btn" disabled>Stop</button>
+      <label><input type="checkbox" id="showEnglish" checked> EN preview</label>
+      <label><input type="checkbox" id="mirrorMode"> Mirror</label>
+      <select id="sizeSelect">
+        <option value="sm">Small</option>
+        <option value="md" selected>Medium</option>
+        <option value="lg">Large</option>
+      </select>
+    </div>
+
+    <div id="tp" class="teleprompter">
+      <div id="tpThai" class="tp-line tp-thai">…</div>
+      <div id="tpEnglish" class="tp-line tp-english"></div>
+    </div>
+
+    <script>
+      const TARGET_SAMPLE_RATE = 16000;
+      let ws = null;
+      let audioContext = null;
+      let processor = null;
+      let mediaStream = null;
+      let showEnglish = true;
+
+      const el = {
+        thai: document.getElementById('tpThai'),
+        english: document.getElementById('tpEnglish'),
+        start: document.getElementById('startBtn'),
+        stop: document.getElementById('stopBtn'),
+        mirror: document.getElementById('mirrorMode'),
+        size: document.getElementById('sizeSelect'),
+        container: document.getElementById('tp'),
+      };
+
+      function connect() {
+        const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+        const params = new URLSearchParams(location.search);
+        const follow = params.get('follow');
+        if (follow) {
+          ws = new WebSocket(`${protocol}://${location.host}/ws/follow/${follow}`);
+        } else {
+          ws = new WebSocket(`${protocol}://${location.host}/ws/transcribe`);
+        }
+        ws.binaryType = 'arraybuffer';
+        ws.onopen = () => {
+          const params = new URLSearchParams(location.search);
+          const follow = params.get('follow');
+          if (!follow) {
+            ws.send(JSON.stringify({ type: 'config', sampleRate: TARGET_SAMPLE_RATE }));
+          }
+        };
+        ws.onmessage = (ev) => {
+          try {
+            const msg = JSON.parse(ev.data);
+            if (msg.type === 'partial' || msg.type === 'final') {
+              el.thai.textContent = msg.thai || '';
+              if (showEnglish) el.english.textContent = msg.english || '';
+              else el.english.textContent = '';
+              if (msg.type === 'final') {
+                // brief fade to hint final
+                el.thai.style.opacity = '0.9';
+                setTimeout(()=>{ el.thai.style.opacity = '1'; }, 120);
+              }
+            }
+          } catch {}
+        };
+        ws.onclose = () => stop();
+      }
+
+      async function start() {
+        const params = new URLSearchParams(location.search);
+        const follow = params.get('follow');
+        connect();
+        if (!follow) {
+          mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          await setupAudio(mediaStream);
+        }
+        el.start.disabled = true;
+        el.stop.disabled = false;
+      }
+
+      function stop() {
+        if (processor) { processor.disconnect(); processor.onaudioprocess = null; processor = null; }
+        if (audioContext) { audioContext.close(); audioContext = null; }
+        if (mediaStream) { mediaStream.getTracks().forEach(t=>t.stop()); mediaStream = null; }
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          const params = new URLSearchParams(location.search);
+          const follow = params.get('follow');
+          if (!follow) ws.send(JSON.stringify({ type: 'control', action: 'stop' }));
+          ws.close();
+        }
+        el.start.disabled = false;
+        el.stop.disabled = true;
+      }
+
+      async function setupAudio(stream) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        processor = audioContext.createScriptProcessor(4096, 1, 1);
+        processor.onaudioprocess = (e) => {
+          if (!ws || ws.readyState !== WebSocket.OPEN) return;
+          const input = e.inputBuffer.getChannelData(0);
+          const down = downsampleBuffer(input, audioContext.sampleRate, TARGET_SAMPLE_RATE);
+          const pcm = floatToPCM(down);
+          ws.send(pcm);
+        };
+        source.connect(processor);
+        processor.connect(audioContext.destination);
+      }
+
+      function downsampleBuffer(buffer, sampleRate, outSampleRate) {
+        if (outSampleRate === sampleRate) return buffer;
+        const ratio = sampleRate / outSampleRate;
+        const newLen = Math.round(buffer.length / ratio);
+        const result = new Float32Array(newLen);
+        let offsetResult = 0, offsetBuffer = 0;
+        while (offsetResult < result.length) {
+          const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+          let accum = 0, count = 0;
+          for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) { accum += buffer[i]; count++; }
+          result[offsetResult] = count > 0 ? accum / count : 0;
+          offsetResult++; offsetBuffer = nextOffsetBuffer;
+        }
+        return result;
+      }
+
+      function floatToPCM(float32Array) {
+        const buffer = new ArrayBuffer(float32Array.length * 2);
+        const view = new DataView(buffer);
+        let offset = 0;
+        for (let i = 0; i < float32Array.length; i++, offset += 2) {
+          let s = Math.max(-1, Math.min(1, float32Array[i]));
+          view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+        }
+        return buffer;
+      }
+
+      // UI bindings
+      document.getElementById('showEnglish').addEventListener('change', (e)=>{
+        showEnglish = e.target.checked;
+        if (!showEnglish) el.english.textContent = '';
+      });
+      el.mirror.addEventListener('change', (e)=>{
+        if (e.target.checked) el.container.classList.add('mirror');
+        else el.container.classList.remove('mirror');
+      });
+      el.size.addEventListener('change', (e)=>{
+        const v = e.target.value;
+        if (v === 'sm') { el.thai.style.fontSize = 'clamp(1.6rem, 5vw, 3rem)'; }
+        if (v === 'md') { el.thai.style.fontSize = 'clamp(2rem, 6vw, 4.25rem)'; }
+        if (v === 'lg') { el.thai.style.fontSize = 'clamp(2.6rem, 8vw, 6rem)'; }
+      });
+
+      el.start.addEventListener('click', ()=> start());
+      el.stop.addEventListener('click', ()=> stop());
+
+      window.addEventListener('beforeunload', ()=> stop());
+    </script>
+  </body>
+</html>

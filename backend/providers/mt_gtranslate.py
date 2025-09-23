@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Optional
 
 from google.cloud import translate_v2 as translate
@@ -27,10 +28,11 @@ class GoogleTranslateProvider(MTProvider):
             return MTResult(text="", provider=self.name, is_final=is_final)
         if self._client is None:
             raise RuntimeError("GoogleTranslateProvider.setup() must be awaited before use.")
+        target_lang = os.getenv("MT_TARGET_LANG", "th").strip() or "th"
         response = await to_thread(
             self._client.translate,
             text,
-            target_language="th",
+            target_language=target_lang,
             format_="text",
         )
         thai = response.get("translatedText", "").strip()

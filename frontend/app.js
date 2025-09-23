@@ -13,6 +13,7 @@ const elements = {
   saveBtn: document.getElementById("saveBtn"),
   englishToggle: document.getElementById("englishToggle"),
   sizeButtons: Array.from(document.querySelectorAll(".size-btn")),
+  tpLink: document.getElementById("tpLink"),
 };
 
 let websocket = null;
@@ -84,6 +85,12 @@ function handleMessage(data) {
     case "session":
       sessionId = data.sessionId;
       appendLog(`Session: ${sessionId}`);
+      if (elements.tpLink) {
+        const url = new URL(window.location.origin + "/teleprompter");
+        url.searchParams.set("follow", sessionId);
+        elements.tpLink.href = url.toString();
+        elements.tpLink.style.display = "inline-block";
+      }
       break;
     case "status":
       setStatus(data.status);

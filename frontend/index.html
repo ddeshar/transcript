@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Realtime English → Thai Subtitles</title>
-  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
   <header class="app-header">
@@ -22,6 +22,7 @@
         <button id="stopBtn" disabled>Stop</button>
         <button id="clearBtn">Clear</button>
         <button id="saveBtn" disabled>Save (.txt)</button>
+        <a id="tpLink" class="button" target="_blank" rel="noopener" style="display:none">Teleprompter</a>
       </div>
       <div class="control-row secondary">
         <label class="toggle">
@@ -46,6 +47,6 @@
     <section class="log" id="log"></section>
   </main>
 
-  <script src="/app.js" type="module"></script>
+  <script src="/static/app.js" type="module"></script>
 </body>
 </html>

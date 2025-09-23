@@ -133,6 +133,7 @@ logs/
 tmp/
 temp/
 .tmp/
+test_server.py
 
 # Jupyter Notebooks
 .ipynb_checkpoints

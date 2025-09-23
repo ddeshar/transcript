@@ -24,10 +24,14 @@ from .vad import VoiceActivityDetector
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
 
+# Followers hub: for each transcription session ID, keep a set of queues to broadcast
+# real-time messages to follower WebSocket connections (e.g., teleprompter clients).
+SESSION_FOLLOWERS: dict[str, set[asyncio.Queue[Optional[dict]]]] = {}
+
 
 class Settings(BaseSettings):
-    asr_provider: str = Field(default="vosk", alias="ASR_PROVIDER")
-    mt_provider: str = Field(default="marian", alias="MT_PROVIDER")
+    asr_provider: str = Field(default="mock", alias="ASR_PROVIDER")
+    mt_provider: str = Field(default="mock", alias="MT_PROVIDER")
     cors_origins: str = Field(default="http://localhost:8000", alias="CORS_ORIGINS")
     audio_sample_rate: int = Field(default=16000, alias="AUDIO_SAMPLE_RATE")
     min_silence_ms: int = Field(default=600, alias="MIN_SILENCE_MS")
@@ -35,6 +39,8 @@ class Settings(BaseSettings):
 
     class Config:
         case_sensitive = False
+        env_file = ".env"
+        extra = "ignore"
 
 
 def _parse_origins(raw: str) -> list[str]:
@@ -88,6 +94,16 @@ async def health() -> JSONResponse:
 @app.get("/")
 async def index() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "index.html")
+
+
+@app.get("/favicon.ico")
+async def favicon() -> FileResponse:
+    return FileResponse(FRONTEND_DIR / "favicon.ico")
+
+
+@app.get("/teleprompter")
+async def teleprompter() -> FileResponse:
+    return FileResponse(FRONTEND_DIR / "teleprompter.html")
 
 
 @dataclass
@@ -165,6 +181,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     },
                 }
                 await send(message)
+                # Broadcast to any registered followers for this session
+                followers = SESSION_FOLLOWERS.get(sess_id)
+                if followers:
+                    for q in list(followers):
+                        with contextlib.suppress(Exception):
+                            await q.put(message)
                 if result.is_final:
                     state.transcript.add_segment(message)
                     await send({"type": "status", "status": "listening"})
@@ -240,8 +262,49 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             with contextlib.suppress(Exception):
                 await asr_stream.finalize()
         await outgoing.put(None)
+        # Cleanup followers (close their queues)
+        if sess_id in SESSION_FOLLOWERS:
+            for q in list(SESSION_FOLLOWERS[sess_id]):
+                with contextlib.suppress(Exception):
+                    await q.put(None)
+            SESSION_FOLLOWERS.pop(sess_id, None)
         with contextlib.suppress(Exception):
             await sender_task
 
 
 __all__ = ["app"]
+
+
+async def _follower_sender(ws: WebSocket, queue: "asyncio.Queue[Optional[dict]]") -> None:
+    try:
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            await ws.send_json(item)
+    finally:
+        with contextlib.suppress(Exception):
+            await ws.close()
+
+
+@app.websocket("/ws/follow/{sess_id}")
+async def ws_follow(websocket: WebSocket, sess_id: str) -> None:
+    await websocket.accept()
+    q: asyncio.Queue[Optional[dict]] = asyncio.Queue()
+    # Register follower
+    SESSION_FOLLOWERS.setdefault(sess_id, set()).add(q)
+    sender = asyncio.create_task(_follower_sender(websocket, q))
+    try:
+        # Followers are receive-only; keep connection open until disconnect
+        while True:
+            msg = await websocket.receive()
+            if "type" in msg and msg["type"] == "websocket.disconnect":
+                break
+    finally:
+        # Unregister follower
+        with contextlib.suppress(KeyError):
+            SESSION_FOLLOWERS.get(sess_id, set()).discard(q)
+        with contextlib.suppress(Exception):
+            await q.put(None)
+        with contextlib.suppress(Exception):
+            await sender
