@@ -129,6 +129,13 @@ async def get_settings() -> JSONResponse:
     whisper_cpp_path = BASE_DIR / "models" / "whisper.cpp"
     if whisper_cpp_path.exists() and any(whisper_cpp_path.glob("*.bin")):
         available_asr_providers.append("whispercpp")
+
+    # Check for faster-whisper (always available if installed)
+    try:
+        import faster_whisper  # noqa
+        available_asr_providers.append("faster_whisper")
+    except ImportError:
+        pass
     
     # Check MT providers
     marian_model_path = os.environ.get(
@@ -248,6 +255,20 @@ async def get_env_vars() -> JSONResponse:
         "AUDIO_SAMPLE_RATE": os.environ.get("AUDIO_SAMPLE_RATE", ""),
         "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", ""),
         "OPENAI_WHISPER_MODEL": os.environ.get("OPENAI_WHISPER_MODEL", ""),
+        "FASTER_WHISPER_MODEL": os.environ.get("FASTER_WHISPER_MODEL", ""),
+        "FASTER_WHISPER_DEVICE": os.environ.get("FASTER_WHISPER_DEVICE", ""),
+        "FASTER_WHISPER_COMPUTE_TYPE": os.environ.get(
+            "FASTER_WHISPER_COMPUTE_TYPE", ""
+        ),
+        "FASTER_WHISPER_LANGUAGE": os.environ.get(
+            "FASTER_WHISPER_LANGUAGE", ""
+        ),
+        "FASTER_WHISPER_BEAM_SIZE": os.environ.get(
+            "FASTER_WHISPER_BEAM_SIZE", ""
+        ),
+        "FASTER_WHISPER_CHUNK_DURATION": os.environ.get(
+            "FASTER_WHISPER_CHUNK_DURATION", ""
+        ),
         "GCP_PROJECT": os.environ.get("GCP_PROJECT", ""),
         "GOOGLE_APPLICATION_CREDENTIALS": os.environ.get(
             "GOOGLE_APPLICATION_CREDENTIALS", ""

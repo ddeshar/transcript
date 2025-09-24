@@ -6,6 +6,7 @@ from .asr_base import ASRProvider
 from .asr_vosk import VoskASRProvider
 from .asr_whispercpp import WhisperCppASRProvider
 from .asr_cloud import WhisperCloudASRProvider
+from .asr_faster_whisper import FasterWhisperASRProvider
 from .asr_mock import MockASRProvider
 from .mt_base import MTProvider
 from .mt_marian import MarianMTProvider
@@ -36,6 +37,23 @@ def create_asr_provider(
             )
         )
         return WhisperCppASRProvider(model_path=model_path)
+    if name == "faster_whisper":
+        model_size = settings.get("FASTER_WHISPER_MODEL", "small")
+        device = settings.get("FASTER_WHISPER_DEVICE", "cpu")
+        compute_type = settings.get("FASTER_WHISPER_COMPUTE_TYPE", "int8")
+        language = settings.get("FASTER_WHISPER_LANGUAGE", "en")
+        beam_size = int(settings.get("FASTER_WHISPER_BEAM_SIZE", "1"))
+        chunk_duration = float(
+            settings.get("FASTER_WHISPER_CHUNK_DURATION", "2.0")
+        )
+        return FasterWhisperASRProvider(
+            model_size=model_size,
+            device=device,
+            compute_type=compute_type,
+            language=language,
+            beam_size=beam_size,
+            chunk_duration=chunk_duration,
+        )
     if name in {"whisper_api", "openai"}:
         return WhisperCloudASRProvider(
             api_key=settings.get("OPENAI_API_KEY"),

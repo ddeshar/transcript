@@ -45,17 +45,32 @@ class VoiceActivityDetector:
     def process(self, audio: bytes) -> List[VADEvent]:
         events: List[VADEvent] = []
         for frame in self._frame_generator(audio):
-            is_speech = self.vad.is_speech(frame, self.sample_rate)
+            try:
+                # Check frame size is correct for VAD
+                if len(frame) != self.frame_bytes:
+                    continue
+                is_speech = self.vad.is_speech(frame, self.sample_rate)
+            except (ValueError, RuntimeError):
+                # If VAD fails, assume it's speech to keep processing
+                is_speech = True
+                
             self._processed_samples += self.frame_bytes // 2
-            timestamp_ms = int(self._processed_samples / self.sample_rate * 1000)
+            timestamp_ms = int(
+                self._processed_samples / self.sample_rate * 1000
+            )
             self.ring_buffer.append((frame, is_speech))
             voiced_count = sum(1 for _, voiced in self.ring_buffer if voiced)
-            if not self.in_speech and voiced_count > 0.9 * len(self.ring_buffer):
+            threshold = 0.9 * len(self.ring_buffer)
+            if not self.in_speech and voiced_count > threshold:
                 self.in_speech = True
-                events.append(VADEvent(type="speech", timestamp_ms=timestamp_ms))
+                events.append(
+                    VADEvent(type="speech", timestamp_ms=timestamp_ms)
+                )
             elif self.in_speech and voiced_count < 0.2 * len(self.ring_buffer):
                 self.in_speech = False
-                events.append(VADEvent(type="silence", timestamp_ms=timestamp_ms))
+                events.append(
+                    VADEvent(type="silence", timestamp_ms=timestamp_ms)
+                )
         return events
 
 
