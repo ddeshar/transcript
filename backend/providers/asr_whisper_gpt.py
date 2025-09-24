@@ -105,19 +105,31 @@ class WhisperGPTStream(ASRStream):
             )
             
             # Step 3: GPT translation to Thai (parallel processing)
-            # Only translate meaningful phrases (at least 3 words and 10 characters)
-            # Also check confidence and avoid translating noise/artifacts
+            # Enhanced noise filtering - be very strict about what to translate
             words = english_text.split()
-            if (len(words) >= 3 and 
-                len(english_text.strip()) >= 10 and
-                not any(word.lower() in ["um", "uh", "ah", "eh", "mmm"] 
-                       for word in words)):
-                thai_text = await self._translate_to_thai(english_text)
+            
+            # Noise patterns to completely avoid
+            noise_words = {
+                "um", "uh", "ah", "eh", "mmm", "hmm", "oh", "meow", "mew",
+                "yeah", "yes", "no", "ok", "okay", "hi", "hello", "bye",
+                "you", "i", "me", "we", "they", "it", "is", "are", "was",
+                "the", "a", "an", "and", "or", "but", "so", "to", "of"
+            }
+            
+            # Check if it's mostly noise or very short
+            if (len(words) < 4 or  # Require at least 4 words
+                len(english_text.strip()) < 15 or  # Require at least 15 characters
+                len([w for w in words if w.lower() not in noise_words]) < 3 or  # At least 3 meaningful words
+                any(word.lower() in ["meow", "mew", "woof", "bark"] for word in words)):  # Animal sounds
+                return  # Skip translation for noise/short phrases
                 
-                # Only send translation if valid and meaningful
-                if (thai_text and 
-                    thai_text != english_text and 
-                    len(thai_text.strip()) > 2):
+            thai_text = await self._translate_to_thai(english_text)
+            
+            # Only send translation if valid and meaningful
+            if (thai_text and 
+                thai_text != english_text and 
+                len(thai_text.strip()) > 5 and  # Require longer Thai output
+                not any(noise in thai_text.lower() for noise in ["เหมียว", "โฮ่ง", "อึ่ง"])):
                     await self._queue.put(
                         ASRResult(
                             session_id=self.session_id,
@@ -195,20 +207,30 @@ Rules:
                 len(thai_text) > 0 and
                 thai_text != english_text):
                 
-                # Clean up any remaining dual politeness particles aggressively
-                thai_text = thai_text.replace("ค่ะ/ครับ", politeness_particle)
-                thai_text = thai_text.replace("ครับ/ค่ะ", politeness_particle)
-                thai_text = thai_text.replace("ค่ะครับ", politeness_particle)
-                thai_text = thai_text.replace("ครับค่ะ", politeness_particle)
-                thai_text = thai_text.replace(" ค่ะ ครับ", f" {politeness_particle}")
-                thai_text = thai_text.replace(" ครับ ค่ะ", f" {politeness_particle}")
+                # AGGRESSIVELY clean up dual politeness particles
+                import re
                 
-                # If gender is male, replace any remaining ค่ะ with ครับ
+                # Remove all mixed particle patterns
+                mixed_patterns = [
+                    r"ค่ะ/ครับ", r"ครับ/ค่ะ", r"ค่ะครับ", r"ครับค่ะ",
+                    r"ค่ะ\s+ครับ", r"ครับ\s+ค่ะ", r"\(ค่ะ/ครับ\)",
+                    r"\(ครับ/ค่ะ\)", r"ค่ะ\s*/\s*ครับ", r"ครับ\s*/\s*ค่ะ"
+                ]
+                
+                for pattern in mixed_patterns:
+                    thai_text = re.sub(pattern, politeness_particle, thai_text)
+                
+                # Force gender consistency - replace ALL instances
                 if gender in ["male", "m", "ครับ"]:
-                    thai_text = thai_text.replace("ค่ะ", "ครับ")
+                    # For male: replace any ค่ะ with ครับ
+                    thai_text = re.sub(r"ค่ะ", "ครับ", thai_text)
                 else:
-                    # If gender is female, replace any remaining ครับ with ค่ะ
-                    thai_text = thai_text.replace("ครับ", "ค่ะ")
+                    # For female: replace any ครับ with ค่ะ  
+                    thai_text = re.sub(r"ครับ", "ค่ะ", thai_text)
+                
+                # Clean up any duplicate particles
+                thai_text = re.sub(r"(ครับ\s*){2,}", "ครับ", thai_text)
+                thai_text = re.sub(r"(ค่ะ\s*){2,}", "ค่ะ", thai_text)
                 
                 return thai_text
             return ""  # Don't return invalid translations

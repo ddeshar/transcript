@@ -484,7 +484,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     await send({"type": "session", "sessionId": sess_id})
     await send({"type": "status", "status": "ready"})
 
-    vad = VoiceActivityDetector(sample_rate=state.sample_rate)
+    vad = VoiceActivityDetector(
+        sample_rate=state.sample_rate,
+        aggressiveness=3,  # Most aggressive noise filtering (0-3)
+        padding_duration_ms=200  # Shorter padding to reduce false speech detection
+    )
     asr_stream: Optional[ASRStream] = None
 
     async def forward_results(stream: ASRStream) -> None:
@@ -547,7 +551,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     sr = data.get("sampleRate")
                     if isinstance(sr, int) and sr > 0:
                         state.sample_rate = sr
-                        vad = VoiceActivityDetector(sample_rate=state.sample_rate)
+                        vad = VoiceActivityDetector(
+                            sample_rate=state.sample_rate,
+                            aggressiveness=3,  # Most aggressive filtering
+                            padding_duration_ms=200
+                        )
                         if asr_stream:
                             # recreate stream with new rate
                             await asr_stream.finalize()
