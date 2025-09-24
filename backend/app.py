@@ -6,7 +6,8 @@ import os
 import contextlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
+from datetime import datetime
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,7 +27,42 @@ FRONTEND_DIR = BASE_DIR / "frontend"
 
 # Followers hub: for each transcription session ID, keep a set of queues to broadcast
 # real-time messages to follower WebSocket connections (e.g., teleprompter clients).
-SESSION_FOLLOWERS: dict[str, set[asyncio.Queue[Optional[dict]]]] = {}
+SESSION_FOLLOWERS: Dict[str, set] = {}
+
+
+def auto_save_transcript(session_transcript: SessionTranscript, 
+                        session_id_str: str) -> None:
+    """Auto-save transcript to subtitles directory (append to same session file)"""
+    try:
+        # Create subtitles directory if it doesn't exist
+        subtitles_dir = Path("/app/subtitles")
+        subtitles_dir.mkdir(exist_ok=True)
+        
+        # Use session-based filename (same file for entire session)
+        filename = f"transcript_session_{session_id_str[:8]}.txt"
+        file_path = subtitles_dir / filename
+        
+        # Save transcript content (overwrite with full content each time)
+        content = session_transcript.to_text()
+        if content.strip():  # Only save if there's actual content
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(f"Session: {session_id_str}\n")
+                f.write(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("="*50 + "\n\n")
+                f.write(content)
+            print(f"💾 Updated transcript file: {filename}")
+    except Exception as e:
+        print(f"❌ Failed to auto-save transcript: {e}")
+
+
+@dataclass
+class SessionData:
+    sample_rate: int = 16000
+    transcript: SessionTranscript = None
+    
+    def __post_init__(self):
+        if self.transcript is None:
+            self.transcript = SessionTranscript()
 
 
 class Settings(BaseSettings):
@@ -527,6 +563,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             await q.put(message)
                 if result.is_final:
                     state.transcript.add_segment(message)
+                    # Auto-save transcript after each final segment
+                    auto_save_transcript(state.transcript, sess_id)
                     await send({"type": "status", "status": "listening"})
         except asyncio.CancelledError:
             pass

@@ -118,11 +118,11 @@
       async function start() {
         const params = new URLSearchParams(location.search);
         const follow = params.get('follow');
-        connect();
         if (!follow) {
-          mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-          await setupAudio(mediaStream);
+          alert('Teleprompter must be opened from the main page using the Teleprompter link!');
+          return;
         }
+        connect();
         el.start.disabled = true;
         el.stop.disabled = false;
       }

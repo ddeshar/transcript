@@ -12,6 +12,7 @@ services:
       - ../models:/app/models
       - ../sample_audio:/app/sample_audio:ro
       - ../frontend:/app/frontend:ro
+      - ../subtitles:/app/subtitles
       - ../.env.docker:/app/.env
     restart: unless-stopped
     healthcheck:
