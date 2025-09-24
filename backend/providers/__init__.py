@@ -7,6 +7,7 @@ from .asr_vosk import VoskASRProvider
 from .asr_whispercpp import WhisperCppASRProvider
 from .asr_cloud import WhisperCloudASRProvider
 from .asr_faster_whisper import FasterWhisperASRProvider
+from .asr_whisper_gpt import WhisperGPTProvider
 from .asr_mock import MockASRProvider
 from .mt_base import MTProvider
 from .mt_marian import MarianMTProvider
@@ -58,6 +59,12 @@ def create_asr_provider(
         return WhisperCloudASRProvider(
             api_key=settings.get("OPENAI_API_KEY"),
             model=settings.get("OPENAI_WHISPER_MODEL", "whisper-1"),
+        )
+    if name in {"whisper_gpt", "whisper_translate"}:
+        return WhisperGPTProvider(
+            api_key=settings.get("OPENAI_API_KEY"),
+            whisper_model=settings.get("OPENAI_WHISPER_MODEL", "whisper-1"),
+            gpt_model=settings.get("OPENAI_GPT_MODEL", "gpt-3.5-turbo"),
         )
     raise ValueError(f"Unsupported ASR provider: {name}")
 
