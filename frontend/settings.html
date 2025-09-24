@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - EN-TH Subtitles</title>
+    <style>
+        :root {
+            --primary-bg: #1e1e1e;
+            --secondary-bg: #2d2d2d;
+            --tertiary-bg: #3d3d3d;
+            --text-primary: #ffffff;
+            --text-secondary: #b3b3b3;
+            --accent-blue: #007acc;
+            --accent-green: #4caf50;
+            --accent-orange: #ff9800;
+            --accent-red: #f44336;
+            --border-color: #555;
+            --hover-bg: #404040;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--primary-bg);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        h1 {
+            color: var(--accent-blue);
+            font-size: 2rem;
+        }
+
+        .back-btn {
+            background: var(--secondary-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+
+        .back-btn:hover {
+            background: var(--hover-bg);
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+        }
+
+        .settings-section {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 25px;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            color: var(--accent-blue);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .setting-group {
+            margin-bottom: 20px;
+        }
+
+        .setting-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .setting-value {
+            background: var(--tertiary-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 10px;
+            border-radius: 5px;
+            width: 100%;
+            font-size: 14px;
+        }
+
+        .setting-value:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+        }
+
+        input.setting-value {
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input.setting-value::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.7;
+        }
+
+        .setting-select {
+            background: var(--tertiary-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 10px;
+            border-radius: 5px;
+            width: 100%;
+            font-size: 14px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .status-online {
+            background: rgba(76, 175, 80, 0.2);
+            color: var(--accent-green);
+        }
+
+        .status-offline {
+            background: rgba(244, 67, 54, 0.2);
+            color: var(--accent-red);
+        }
+
+        .status-configured {
+            background: rgba(0, 122, 204, 0.2);
+            color: var(--accent-blue);
+        }
+
+        .model-info {
+            background: var(--tertiary-bg);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid var(--accent-blue);
+        }
+
+        .model-path {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: var(--text-secondary);
+            word-break: break-all;
+        }
+
+        .save-btn {
+            background: var(--accent-green);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-top: 20px;
+        }
+
+        .save-btn:hover {
+            background: #45a049;
+        }
+
+        .save-btn:disabled {
+            background: var(--border-color);
+            cursor: not-allowed;
+        }
+
+        .refresh-btn {
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 5px;
+            color: white;
+            font-weight: 600;
+            z-index: 1000;
+            transition: all 0.3s;
+        }
+
+        .notification.success {
+            background: var(--accent-green);
+        }
+
+        .notification.error {
+            background: var(--accent-red);
+        }
+
+        .notification.info {
+            background: var(--accent-blue);
+        }
+
+        .current-provider {
+            font-weight: bold;
+            color: var(--accent-green);
+        }
+
+        .provider-description {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>System Settings</h1>
+            <a href="/" class="back-btn">← Back to Subtitles</a>
+        </div>
+
+        <div class="settings-grid">
+            <!-- Current Status Section -->
+            <div class="settings-section">
+                <h2 class="section-title">Current Status</h2>
+                
+                <div class="setting-group">
+                    <span class="setting-label">ASR Provider (Speech Recognition)</span>
+                    <div class="setting-value" id="current-asr">Loading...</div>
+                </div>
+
+                <div class="setting-group">
+                    <span class="setting-label">MT Provider (Translation)</span>
+                    <div class="setting-value" id="current-mt">Loading...</div>
+                </div>
+
+                <div class="setting-group">
+                    <span class="setting-label">Audio Sample Rate</span>
+                    <div class="setting-value" id="current-sample-rate">Loading...</div>
+                </div>
+
+                <div class="setting-group">
+                    <span class="setting-label">Languages</span>
+                    <div class="setting-value" id="current-languages">Loading...</div>
+                </div>
+
+                <button class="refresh-btn" onclick="loadSettings()">🔄 Refresh</button>
+            </div>
+
+            <!-- Provider Settings Section -->
+            <div class="settings-section">
+                <h2 class="section-title">Provider Settings</h2>
+                
+                <div class="setting-group">
+                    <label class="setting-label" for="asr-provider">ASR Provider</label>
+                    <select class="setting-select" id="asr-provider">
+                        <option value="">Loading...</option>
+                    </select>
+                    <div class="provider-description" id="asr-description"></div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label" for="mt-provider">MT Provider</label>
+                    <select class="setting-select" id="mt-provider">
+                        <option value="">Loading...</option>
+                    </select>
+                    <div class="provider-description" id="mt-description"></div>
+                </div>
+
+                <button class="save-btn" id="save-providers" onclick="saveProviders()">
+                    Save Provider Settings
+                </button>
+            </div>
+
+            <!-- Model Status Section -->
+            <div class="settings-section">
+                <h2 class="section-title">Model Status</h2>
+                
+                <div class="model-info" id="vosk-info">
+                    <strong>Vosk ASR Model</strong>
+                    <div class="model-path" id="vosk-path">Loading...</div>
+                </div>
+
+                <div class="model-info" id="marian-info">
+                    <strong>Marian MT Model</strong>
+                    <div class="model-path" id="marian-path">Loading...</div>
+                </div>
+
+                <div class="model-info" id="ct2-info">
+                    <strong>CTranslate2 Model</strong>
+                    <div class="model-path" id="ct2-path">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Cloud Providers Section -->
+            <div class="settings-section">
+                <h2 class="section-title">Cloud Providers</h2>
+                
+                <div class="setting-group">
+                    <span class="setting-label">OpenAI</span>
+                    <div class="setting-value" id="openai-status">Loading...</div>
+                </div>
+
+                <div class="setting-group">
+                    <span class="setting-label">Google Cloud</span>
+                    <div class="setting-value" id="gcp-status">Loading...</div>
+                </div>
+
+                <div class="setting-group">
+                    <span class="setting-label">AWS</span>
+                    <div class="setting-value" id="aws-status">Loading...</div>
+                </div>
+
+                <div class="provider-description">
+                    Configure cloud providers by setting environment variables below
+                </div>
+            </div>
+
+            <!-- Environment Variables Section -->
+            <div class="settings-section">
+                <h2 class="section-title">Environment Variables</h2>
+                
+                <div id="env-vars-container">
+                    <!-- Environment variables will be loaded here -->
+                </div>
+
+                <button class="save-btn" id="save-env" onclick="saveEnvironmentVars()">
+                    💾 Save Environment Variables
+                </button>
+
+                <button class="save-btn" id="restart-container" onclick="restartContainer()" 
+                        style="background: var(--accent-orange); margin-left: 10px;">
+                    🔄 Restart Container
+                </button>
+                
+                <div class="provider-description" style="margin-top: 15px;">
+                    Changes to environment variables require a container restart to take effect.
+                    API keys and sensitive data are stored in the .env file.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSettings = {};
+        let currentEnvVars = {};
+        const providerDescriptions = {
+            // ASR Providers
+            'mock': 'Mock provider for testing (returns dummy text)',
+            'vosk': 'Offline speech recognition using Vosk models',
+            'whispercpp': 'Local Whisper.cpp for offline speech recognition',
+            'whisper_api': 'OpenAI Whisper API (cloud, requires API key)',
+            'openai': 'OpenAI Whisper API (cloud, requires API key)',
+            
+            // MT Providers
+            'marian': 'Helsinki-NLP Marian models for translation',
+            'opus': 'OPUS-MT models via Marian',
+            'ctranslate2': 'Fast CTranslate2 inference engine',
+            'ct2': 'Fast CTranslate2 inference engine',
+            'gtranslate': 'Google Cloud Translate API',
+            'google': 'Google Cloud Translate API',
+            'awstranslate': 'AWS Translate service',
+            'aws': 'AWS Translate service',
+            'simple_thai': 'Simple word-mapping Thai translation',
+            'simple': 'Simple word-mapping Thai translation'
+        };
+
+        async function loadSettings() {
+            try {
+                document.body.classList.add('loading');
+                
+                // Load general settings
+                const response = await fetch('/api/settings');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                currentSettings = await response.json();
+                updateSettingsDisplay();
+                
+                // Load environment variables
+                await loadEnvironmentVars();
+                
+            } catch (error) {
+                console.error('Failed to load settings:', error);
+                showNotification('Failed to load settings', 'error');
+            } finally {
+                document.body.classList.remove('loading');
+            }
+        }
+
+        async function loadEnvironmentVars() {
+            try {
+                const response = await fetch('/api/env');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                currentEnvVars = data.variables;
+                updateEnvironmentVarsDisplay();
+                
+            } catch (error) {
+                console.error('Failed to load environment variables:', error);
+                showNotification('Failed to load environment variables', 'error');
+            }
+        }
+
+        function updateEnvironmentVarsDisplay() {
+            const container = document.getElementById('env-vars-container');
+            container.innerHTML = '';
+            
+            // Categorize variables
+            const categories = {
+                'Providers': ['ASR_PROVIDER', 'MT_PROVIDER'],
+                'Audio': ['AUDIO_SAMPLE_RATE', 'MIN_SILENCE_MS', 'STATUS_INTERVAL_MS'],
+                'OpenAI': ['OPENAI_API_KEY', 'OPENAI_WHISPER_MODEL'],
+                'Google Cloud': ['GCP_PROJECT', 'GOOGLE_APPLICATION_CREDENTIALS'],
+                'AWS': ['AWS_REGION', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'],
+                'HuggingFace': ['HUGGINGFACE_TOKEN']
+            };
+            
+            for (const [category, vars] of Object.entries(categories)) {
+                const categoryDiv = document.createElement('div');
+                categoryDiv.innerHTML = `<h4 style="margin: 20px 0 10px 0; color: var(--accent-blue); font-size: 1rem;">${category}</h4>`;
+                container.appendChild(categoryDiv);
+                
+                vars.forEach(varName => {
+                    if (varName in currentEnvVars) {
+                        const varDiv = document.createElement('div');
+                        varDiv.className = 'setting-group';
+                        
+                        const isSecret = varName.includes('API_KEY') || varName.includes('SECRET') || varName.includes('TOKEN');
+                        const inputType = isSecret ? 'password' : 'text';
+                        
+                        varDiv.innerHTML = `
+                            <label class="setting-label" for="env-${varName}">${varName}</label>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input 
+                                    type="${inputType}" 
+                                    class="setting-value" 
+                                    id="env-${varName}" 
+                                    value="${currentEnvVars[varName]}"
+                                    placeholder="Enter ${varName.toLowerCase()}"
+                                    style="flex: 1;"
+                                />
+                                ${isSecret ? `<button type="button" onclick="togglePasswordVisibility('env-${varName}')" style="padding: 8px; background: var(--tertiary-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">👁️</button>` : ''}
+                            </div>
+                        `;
+                        container.appendChild(varDiv);
+                    }
+                });
+            }
+        }
+
+        function togglePasswordVisibility(inputId) {
+            const input = document.getElementById(inputId);
+            if (input.type === 'password') {
+                input.type = 'text';
+            } else {
+                input.type = 'password';
+            }
+        }
+
+        async function saveEnvironmentVars() {
+            try {
+                document.getElementById('save-env').disabled = true;
+                document.getElementById('save-env').textContent = '💾 Saving...';
+                
+                // Collect all environment variable values
+                const updatedVars = {};
+                for (const varName in currentEnvVars) {
+                    const input = document.getElementById(`env-${varName}`);
+                    if (input) {
+                        updatedVars[varName] = input.value;
+                    }
+                }
+                
+                const response = await fetch('/api/env', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ variables: updatedVars })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.restart_recommended) {
+                    showNotification(
+                        `${result.message}. Restart container to apply changes.`, 
+                        'success'
+                    );
+                } else {
+                    showNotification(result.message, 'success');
+                }
+                
+                // Reload settings to show updated status
+                setTimeout(() => {
+                    loadSettings();
+                }, 1000);
+                
+            } catch (error) {
+                console.error('Failed to save environment variables:', error);
+                showNotification(`Failed to save: ${error.message}`, 'error');
+            } finally {
+                document.getElementById('save-env').disabled = false;
+                document.getElementById('save-env').textContent = '💾 Save Environment Variables';
+            }
+        }
+
+        async function restartContainer() {
+            if (!confirm('Are you sure you want to restart the container? This will temporarily interrupt service.')) {
+                return;
+            }
+            
+            try {
+                document.getElementById('restart-container').disabled = true;
+                document.getElementById('restart-container').textContent = '🔄 Restarting...';
+                
+                const response = await fetch('/api/restart', {
+                    method: 'POST',
+                });
+                
+                if (response.ok) {
+                    showNotification('Container restart initiated. Please wait a few seconds and refresh the page.', 'info');
+                    
+                    // Disable all buttons during restart
+                    document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+                    
+                    // Auto-reload after delay
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 5000);
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+            } catch (error) {
+                console.error('Failed to restart container:', error);
+                showNotification('Failed to restart container', 'error');
+                document.getElementById('restart-container').disabled = false;
+                document.getElementById('restart-container').textContent = '🔄 Restart Container';
+            }
+        }
+
+        function updateSettingsDisplay() {
+            const { current, available, models, languages, cloud_providers } = currentSettings;
+            
+            // Update current status
+            document.getElementById('current-asr').innerHTML = 
+                `<span class="current-provider">${current.asr_provider}</span>` +
+                `<span class="status-indicator status-online">ACTIVE</span>`;
+                
+            document.getElementById('current-mt').innerHTML = 
+                `<span class="current-provider">${current.mt_provider}</span>` +
+                `<span class="status-indicator status-online">ACTIVE</span>`;
+                
+            document.getElementById('current-sample-rate').textContent = 
+                `${current.audio_sample_rate} Hz`;
+                
+            document.getElementById('current-languages').textContent = 
+                `${languages.source.toUpperCase()} → ${languages.target.toUpperCase()}`;
+
+            // Update provider dropdowns
+            updateProviderDropdown('asr-provider', available.asr_providers, current.asr_provider);
+            updateProviderDropdown('mt-provider', available.mt_providers, current.mt_provider);
+
+            // Update model status
+            updateModelInfo('vosk', models.vosk);
+            updateModelInfo('marian', models.marian);
+            updateModelInfo('ct2', models.ctranslate2);
+
+            // Update cloud provider status
+            updateCloudStatus('openai-status', cloud_providers.openai_configured);
+            updateCloudStatus('gcp-status', cloud_providers.gcp_configured);
+            updateCloudStatus('aws-status', cloud_providers.aws_configured);
+
+            // Update provider descriptions
+            updateProviderDescription('asr-provider', 'asr-description');
+            updateProviderDescription('mt-provider', 'mt-description');
+        }
+
+        function updateProviderDropdown(selectId, options, currentValue) {
+            const select = document.getElementById(selectId);
+            select.innerHTML = '';
+            
+            options.forEach(option => {
+                const optionElement = document.createElement('option');
+                optionElement.value = option;
+                optionElement.textContent = option;
+                if (option === currentValue) {
+                    optionElement.selected = true;
+                }
+                select.appendChild(optionElement);
+            });
+        }
+
+        function updateModelInfo(modelType, modelData) {
+            const pathElement = document.getElementById(`${modelType}-path`);
+            const infoElement = document.getElementById(`${modelType}-info`);
+            
+            pathElement.textContent = modelData.path;
+            
+            if (modelData.exists) {
+                infoElement.style.borderLeftColor = 'var(--accent-green)';
+                pathElement.insertAdjacentHTML('beforeend', 
+                    '<span class="status-indicator status-online" style="margin-left: 10px;">EXISTS</span>');
+            } else {
+                infoElement.style.borderLeftColor = 'var(--accent-red)';
+                pathElement.insertAdjacentHTML('beforeend', 
+                    '<span class="status-indicator status-offline" style="margin-left: 10px;">MISSING</span>');
+            }
+        }
+
+        function updateCloudStatus(elementId, isConfigured) {
+            const element = document.getElementById(elementId);
+            if (isConfigured) {
+                element.innerHTML = 'Configured <span class="status-indicator status-configured">READY</span>';
+            } else {
+                element.innerHTML = 'Not configured <span class="status-indicator status-offline">MISSING</span>';
+            }
+        }
+
+        function updateProviderDescription(selectId, descriptionId) {
+            const select = document.getElementById(selectId);
+            const descriptionElement = document.getElementById(descriptionId);
+            
+            function updateDesc() {
+                const selectedValue = select.value;
+                descriptionElement.textContent = providerDescriptions[selectedValue] || '';
+            }
+            
+            updateDesc();
+            select.addEventListener('change', updateDesc);
+        }
+
+        async function saveProviders() {
+            const asrProvider = document.getElementById('asr-provider').value;
+            const mtProvider = document.getElementById('mt-provider').value;
+            
+            const newSettings = {
+                asr_provider: asrProvider,
+                mt_provider: mtProvider
+            };
+
+            try {
+                document.getElementById('save-providers').disabled = true;
+                
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(newSettings)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.restart_required) {
+                    showNotification('Settings saved! Restart container to apply changes.', 'info');
+                } else {
+                    showNotification('Settings saved successfully!', 'success');
+                }
+                
+            } catch (error) {
+                console.error('Failed to save settings:', error);
+                showNotification('Failed to save settings', 'error');
+            } finally {
+                document.getElementById('save-providers').disabled = false;
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 300);
+            }, 4000);
+        }
+
+        // Load settings on page load
+        document.addEventListener('DOMContentLoaded', loadSettings);
+    </script>
+</body>
+</html>

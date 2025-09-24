@@ -30,6 +30,29 @@ body {
   flex-wrap: wrap;
 }
 
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.settings-link {
+  padding: 6px 12px;
+  background: rgba(17, 24, 39, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background 0.2s ease, border 0.2s ease;
+}
+
+.settings-link:hover {
+  background: rgba(17, 24, 39, 0.9);
+  border-color: rgba(148, 163, 184, 0.5);
+}
+
 .app-header h1 {
   margin: 0;
   font-size: clamp(1.5rem, 4vw, 2.2rem);

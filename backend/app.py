@@ -96,9 +96,268 @@ async def index() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "index.html")
 
 
+@app.get("/settings")
+async def settings_page() -> FileResponse:
+    return FileResponse(FRONTEND_DIR / "settings.html")
+
+
 @app.get("/favicon.ico")
 async def favicon() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "favicon.ico")
+
+
+@app.get("/api/settings")
+async def get_settings() -> JSONResponse:
+    """Get current system settings and available providers."""
+    
+    # Check which providers are actually available based on dependencies
+    available_asr_providers = ["mock"]  # Mock is always available
+    # Always available providers
+    available_mt_providers = ["mock", "simple_thai", "simple"]
+    
+    # Check ASR providers
+    vosk_model_path = os.environ.get(
+        "VOSK_MODEL_DIR", str(BASE_DIR / "models" / "vosk")
+    )
+    if Path(vosk_model_path).exists() and any(Path(vosk_model_path).glob("*")):
+        available_asr_providers.append("vosk")
+    
+    if os.environ.get("OPENAI_API_KEY"):
+        available_asr_providers.extend(["whisper_api", "openai"])
+    
+    # Check for whisper.cpp model
+    whisper_cpp_path = BASE_DIR / "models" / "whisper.cpp"
+    if whisper_cpp_path.exists() and any(whisper_cpp_path.glob("*.bin")):
+        available_asr_providers.append("whispercpp")
+    
+    # Check MT providers
+    marian_model_path = os.environ.get(
+        "MARIAN_MODEL_DIR", str(BASE_DIR / "models" / "marian")
+    )
+    if (Path(marian_model_path).exists() and
+            any(Path(marian_model_path).glob("*"))):
+        available_mt_providers.extend(["marian", "opus"])
+    
+    ct2_model_path = os.environ.get(
+        "CT2_MODEL_DIR",
+        str(BASE_DIR / "models" / "ctranslate2" / "en-th")
+    )
+    if Path(ct2_model_path).exists() and any(Path(ct2_model_path).glob("*")):
+        available_mt_providers.extend(["ctranslate2", "ct2"])
+    
+    # Check cloud providers
+    if (os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or
+            os.environ.get("GCP_PROJECT")):
+        available_mt_providers.extend(["gtranslate", "google"])
+    
+    if (os.environ.get("AWS_ACCESS_KEY_ID") and
+            os.environ.get("AWS_SECRET_ACCESS_KEY")):
+        available_mt_providers.extend(["awstranslate", "aws"])
+    
+    # Get model paths and statuses
+    vosk_model_path = os.environ.get(
+        "VOSK_MODEL_DIR", str(BASE_DIR / "models" / "vosk")
+    )
+    marian_model_path = os.environ.get(
+        "MARIAN_MODEL_DIR", str(BASE_DIR / "models" / "marian")
+    )
+    ct2_model_path = os.environ.get(
+        "CT2_MODEL_DIR", str(BASE_DIR / "models" / "ctranslate2" / "en-th")
+    )
+    
+    return JSONResponse({
+        "current": {
+            "asr_provider": ASR_PROVIDER.name,
+            "mt_provider": MT_PROVIDER.name,
+            "audio_sample_rate": settings.audio_sample_rate,
+            "min_silence_ms": settings.min_silence_ms,
+            "status_interval_ms": settings.status_broadcast_interval_ms,
+            "cors_origins": settings.cors_origins,
+        },
+        "available": {
+            "asr_providers": available_asr_providers,
+            "mt_providers": available_mt_providers,
+        },
+        "models": {
+            "vosk": {
+                "path": vosk_model_path,
+                "exists": Path(vosk_model_path).exists(),
+            },
+            "marian": {
+                "path": marian_model_path,
+                "exists": Path(marian_model_path).exists(),
+            },
+            "ctranslate2": {
+                "path": ct2_model_path,
+                "exists": Path(ct2_model_path).exists(),
+            },
+        },
+        "languages": {
+            "source": "en",  # Currently hardcoded to English
+            "target": "th",  # Currently hardcoded to Thai
+            "available_targets": ["th"],  # Could be expanded
+        },
+        "cloud_providers": {
+            "openai_configured": bool(os.environ.get("OPENAI_API_KEY")),
+            "gcp_configured": bool(
+                os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or
+                os.environ.get("GCP_PROJECT")
+            ),
+            "aws_configured": bool(
+                os.environ.get("AWS_ACCESS_KEY_ID") and
+                os.environ.get("AWS_SECRET_ACCESS_KEY")
+            ),
+        },
+        "timestamp": utc_timestamp_ms(),
+    })
+
+
+@app.post("/api/settings")
+async def update_settings(new_settings: dict) -> JSONResponse:
+    """Update system settings (note: requires restart to take effect)."""
+    # This would typically require a restart to take effect
+    # For now, just return what would be changed
+    changes = {}
+    
+    if "asr_provider" in new_settings:
+        changes["asr_provider"] = {
+            "old": ASR_PROVIDER.name,
+            "new": new_settings["asr_provider"]
+        }
+    
+    if "mt_provider" in new_settings:
+        changes["mt_provider"] = {
+            "old": MT_PROVIDER.name,
+            "new": new_settings["mt_provider"]
+        }
+    
+    return JSONResponse({
+        "message": "Settings update received. Restart required.",
+        "changes": changes,
+        "restart_required": True,
+    })
+
+
+@app.get("/api/env")
+async def get_env_vars() -> JSONResponse:
+    """Get current environment variables for editing."""
+    # Only return safe-to-edit variables
+    editable_vars = {
+        "ASR_PROVIDER": os.environ.get("ASR_PROVIDER", ""),
+        "MT_PROVIDER": os.environ.get("MT_PROVIDER", ""),
+        "AUDIO_SAMPLE_RATE": os.environ.get("AUDIO_SAMPLE_RATE", ""),
+        "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", ""),
+        "OPENAI_WHISPER_MODEL": os.environ.get("OPENAI_WHISPER_MODEL", ""),
+        "GCP_PROJECT": os.environ.get("GCP_PROJECT", ""),
+        "GOOGLE_APPLICATION_CREDENTIALS": os.environ.get(
+            "GOOGLE_APPLICATION_CREDENTIALS", ""
+        ),
+        "AWS_REGION": os.environ.get("AWS_REGION", ""),
+        "AWS_ACCESS_KEY_ID": os.environ.get("AWS_ACCESS_KEY_ID", ""),
+        "AWS_SECRET_ACCESS_KEY": os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+        "HUGGINGFACE_TOKEN": os.environ.get("HUGGINGFACE_TOKEN", ""),
+        "MIN_SILENCE_MS": os.environ.get("MIN_SILENCE_MS", ""),
+        "STATUS_INTERVAL_MS": os.environ.get("STATUS_INTERVAL_MS", ""),
+    }
+    
+    return JSONResponse({
+        "variables": editable_vars,
+        "timestamp": utc_timestamp_ms(),
+    })
+
+
+@app.post("/api/env")
+async def update_env_vars(env_update: dict) -> JSONResponse:
+    """Update environment variables in .env file."""
+    try:
+        # Determine which .env file to update
+        # (prefer .env.docker for Docker environments)
+        env_file_path = BASE_DIR / ".env.docker"
+        if not env_file_path.exists():
+            env_file_path = BASE_DIR / ".env"
+        
+        # Read current .env file
+        env_lines = []
+        if env_file_path.exists():
+            with open(env_file_path, 'r', encoding='utf-8') as f:
+                env_lines = f.readlines()
+        
+        # Track changes
+        changes = {}
+        updated_vars = set()
+        
+        # Process each variable in the update
+        for key, value in env_update.get("variables", {}).items():
+            if not key:  # Skip empty keys
+                continue
+                
+            # Clean the value
+            clean_value = str(value).strip()
+            old_value = os.environ.get(key, "")
+            
+            if clean_value != old_value:
+                changes[key] = {"old": old_value, "new": clean_value}
+            
+            # Update environment variable immediately for this session
+            os.environ[key] = clean_value
+            updated_vars.add(key)
+            
+            # Update or add line in .env file
+            found = False
+            for i, line in enumerate(env_lines):
+                if line.strip() and not line.strip().startswith('#'):
+                    if '=' in line:
+                        env_key = line.split('=', 1)[0].strip()
+                        if env_key == key:
+                            env_lines[i] = f"{key}={clean_value}\n"
+                            found = True
+                            break
+            
+            # If not found, add at the end
+            if not found:
+                if env_lines and not env_lines[-1].endswith('\n'):
+                    env_lines.append('\n')
+                env_lines.append(f"{key}={clean_value}\n")
+        
+        # Write updated .env file
+        with open(env_file_path, 'w', encoding='utf-8') as f:
+            f.writelines(env_lines)
+        
+        return JSONResponse({
+            "message": f"Updated {len(changes)} environment variables " +
+                       f"in {env_file_path.name}",
+            "changes": changes,
+            "file_updated": str(env_file_path),
+            "restart_recommended": len(changes) > 0,
+        })
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Failed to update environment variables",
+                "details": str(e)
+            }
+        )
+
+
+@app.post("/api/restart")
+async def restart_container() -> JSONResponse:
+    """Trigger a container restart (for Docker environments)."""
+    def delayed_exit():
+        import time
+        import os
+        time.sleep(1)
+        os._exit(0)
+    
+    # Schedule delayed exit to allow response to be sent
+    import threading
+    threading.Timer(1.0, delayed_exit).start()
+    
+    return JSONResponse({
+        "message": "Container restart initiated",
+        "timestamp": utc_timestamp_ms(),
+    })
 
 
 @app.get("/teleprompter")
