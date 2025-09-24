@@ -105,12 +105,19 @@ class WhisperGPTStream(ASRStream):
             )
             
             # Step 3: GPT translation to Thai (parallel processing)
-            # Only translate meaningful phrases (at least 2 words and 8 characters)
-            if len(english_text.split()) >= 2 and len(english_text.strip()) >= 8:
+            # Only translate meaningful phrases (at least 3 words and 10 characters)
+            # Also check confidence and avoid translating noise/artifacts
+            words = english_text.split()
+            if (len(words) >= 3 and 
+                len(english_text.strip()) >= 10 and
+                not any(word.lower() in ["um", "uh", "ah", "eh", "mmm"] 
+                       for word in words)):
                 thai_text = await self._translate_to_thai(english_text)
                 
-                # Only send translation if it's different from English and not empty
-                if thai_text and thai_text != english_text and not thai_text.startswith("Sorry") and not thai_text.startswith("ขอโทษ"):
+                # Only send translation if valid and meaningful
+                if (thai_text and 
+                    thai_text != english_text and 
+                    len(thai_text.strip()) > 2):
                     await self._queue.put(
                         ASRResult(
                             session_id=self.session_id,
@@ -138,28 +145,71 @@ class WhisperGPTStream(ASRStream):
             )
 
     async def _translate_to_thai(self, english_text: str) -> str:
-        """Use GPT for high-quality Thai translation."""
+        """Use GPT for Thai translation with gender-appropriate politeness."""
         if not english_text or len(english_text.strip()) < 3:
             return ""  # Don't translate very short or empty text
             
+        # Filter out common false positives and noise
+        text_lower = english_text.lower().strip()
+        noise_patterns = [
+            "thank you", "thanks", "bye", "hello", "hi", 
+            "um", "uh", "ah", "oh"
+        ]
+        if (any(pattern in text_lower for pattern in noise_patterns) and 
+            len(text_lower.split()) <= 2):
+            return ""  # Don't translate short phrases that might be noise
+            
         try:
+            # Get gender setting from environment
+            import os
+            gender = os.getenv("THAI_POLITENESS_GENDER", "female").lower()
+            politeness_particle = "ครับ" if gender in ["male", "m", "ครับ"] else "ค่ะ"
+            
+            system_prompt = f"""You are a Thai translator for live subtitles.
+Rules:
+1. Translate English to natural Thai
+2. Use ONLY {politeness_particle} for politeness (NEVER use ค่ะ/ครับ or mixed forms)
+3. Keep it concise for subtitles
+4. Return only the Thai translation
+5. Do NOT include both gender particles - use {politeness_particle} only"""
+
             response = await self.client.chat.completions.create(
                 model=self.gpt_model,
                 messages=[
-                    {"role": "system", "content": "You are a translator. Translate English to Thai for subtitles. Be concise."},
-                    {"role": "user", "content": f"Translate to Thai: {english_text}"}
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Translate: {english_text}"}
                 ],
-                max_tokens=60,  # Shorter for faster response
+                max_tokens=60,
                 temperature=0.1,
             )
             
             thai_text = response.choices[0].message.content.strip()
-            # Filter out error messages and invalid responses
-            if (thai_text and 
-                not thai_text.startswith("Sorry") and 
+            
+            # Enhanced filtering for invalid responses
+            if (thai_text and
+                not thai_text.startswith("Sorry") and
                 not thai_text.startswith("ขอโทษ") and
-                not thai_text.startswith("I") and
-                len(thai_text) > 0):
+                not thai_text.startswith("I can't") and
+                not thai_text.startswith("I cannot") and
+                "ค่ะ/ครับ" not in thai_text and
+                len(thai_text) > 0 and
+                thai_text != english_text):
+                
+                # Clean up any remaining dual politeness particles aggressively
+                thai_text = thai_text.replace("ค่ะ/ครับ", politeness_particle)
+                thai_text = thai_text.replace("ครับ/ค่ะ", politeness_particle)
+                thai_text = thai_text.replace("ค่ะครับ", politeness_particle)
+                thai_text = thai_text.replace("ครับค่ะ", politeness_particle)
+                thai_text = thai_text.replace(" ค่ะ ครับ", f" {politeness_particle}")
+                thai_text = thai_text.replace(" ครับ ค่ะ", f" {politeness_particle}")
+                
+                # If gender is male, replace any remaining ค่ะ with ครับ
+                if gender in ["male", "m", "ครับ"]:
+                    thai_text = thai_text.replace("ค่ะ", "ครับ")
+                else:
+                    # If gender is female, replace any remaining ครับ with ค่ะ
+                    thai_text = thai_text.replace("ครับ", "ค่ะ")
+                
                 return thai_text
             return ""  # Don't return invalid translations
             

@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     audio_sample_rate: int = Field(default=16000, alias="AUDIO_SAMPLE_RATE")
     min_silence_ms: int = Field(default=600, alias="MIN_SILENCE_MS")
     status_broadcast_interval_ms: int = Field(default=1000, alias="STATUS_INTERVAL_MS")
+    thai_politeness_gender: str = Field(default="female", alias="THAI_POLITENESS_GENDER")
 
     class Config:
         case_sensitive = False
@@ -321,6 +322,7 @@ async def get_env_vars() -> JSONResponse:
         "HUGGINGFACE_TOKEN": os.environ.get("HUGGINGFACE_TOKEN", ""),
         "MIN_SILENCE_MS": os.environ.get("MIN_SILENCE_MS", ""),
         "STATUS_INTERVAL_MS": os.environ.get("STATUS_INTERVAL_MS", ""),
+        "THAI_POLITENESS_GENDER": os.environ.get("THAI_POLITENESS_GENDER", ""),
     }
     
     return JSONResponse({

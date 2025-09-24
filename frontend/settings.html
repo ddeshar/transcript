@@ -27,16 +27,31 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: var(--primary-bg);
+            background: linear-gradient(135deg, var(--primary-bg) 0%, #1a1a1a 100%);
             color: var(--text-primary);
             line-height: 1.6;
             min-height: 100vh;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 80%, rgba(0, 122, 204, 0.05) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(76, 175, 80, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
         }
 
         .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
+            position: relative;
         }
 
         .header {
@@ -69,23 +84,53 @@
 
         .settings-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 25px;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
         }
 
         .settings-section {
             background: var(--secondary-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
             padding: 25px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .settings-section:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .full-width-section {
+            grid-column: 1 / -1;
+        }
+
+        @media (max-width: 768px) {
+            .settings-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         .section-title {
-            font-size: 1.3rem;
-            margin-bottom: 20px;
-            color: var(--accent-blue);
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 10px;
+            font-size: 1.5rem;
+            margin: 30px 0 20px 0;
+            color: var(--text-primary);
+            font-weight: 600;
+            position: relative;
+            padding-bottom: 12px;
+        }
+
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(45deg, var(--accent-blue), var(--accent-green));
+            border-radius: 2px;
         }
 
         .setting-group {
@@ -174,35 +219,54 @@
         }
 
         .save-btn {
-            background: var(--accent-green);
+            background: linear-gradient(135deg, var(--accent-green), #45a049);
             color: white;
             border: none;
-            padding: 12px 24px;
-            border-radius: 5px;
+            padding: 14px 28px;
+            border-radius: 8px;
             font-size: 16px;
+            font-weight: 600;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: all 0.3s ease;
             margin-top: 20px;
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+            position: relative;
+            overflow: hidden;
         }
 
         .save-btn:hover {
-            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+        }
+
+        .save-btn:active {
+            transform: translateY(0);
         }
 
         .save-btn:disabled {
             background: var(--border-color);
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
 
         .refresh-btn {
-            background: var(--accent-blue);
+            background: linear-gradient(135deg, var(--accent-blue), #1976d2);
             color: white;
             border: none;
-            padding: 8px 16px;
-            border-radius: 5px;
+            padding: 10px 20px;
+            border-radius: 6px;
             font-size: 14px;
+            font-weight: 500;
             cursor: pointer;
             margin-left: 10px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0, 122, 204, 0.25);
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 122, 204, 0.35);
         }
 
         .loading {
@@ -235,14 +299,186 @@
         }
 
         .current-provider {
-            font-weight: bold;
+            font-weight: 600;
             color: var(--accent-green);
+            position: relative;
+            padding: 8px 12px;
+            background: rgba(76, 175, 80, 0.1);
+            border-radius: 20px;
+            display: inline-block;
+            font-size: 14px;
+            border: 1px solid rgba(76, 175, 80, 0.3);
+        }
+
+        .current-provider::before {
+            content: '●';
+            margin-right: 6px;
+            color: var(--accent-green);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
         .provider-description {
             font-size: 13px;
             color: var(--text-secondary);
-            margin-top: 5px;
+            margin-top: 8px;
+            font-style: italic;
+        }
+
+        .provider-card:hover .current-provider {
+            background: rgba(76, 175, 80, 0.15);
+            border-color: rgba(76, 175, 80, 0.5);
+        }
+
+        /* Environment Variables Styling */
+        .env-category-section {
+            background: var(--secondary-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .env-category-section:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+            border-color: var(--accent-blue);
+        }
+
+        .env-category-header {
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .env-category-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0 0 6px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .env-category-description {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin: 0;
+            font-style: italic;
+            opacity: 0.8;
+        }
+
+        .env-category-vars {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .env-var-item {
+            background: var(--tertiary-bg);
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .env-var-item:hover {
+            border-color: var(--accent-blue);
+            background: var(--secondary-bg);
+        }
+
+        .env-var-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .env-var-label {
+            font-weight: 500;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .env-var-status {
+            font-size: 12px;
+            font-weight: 500;
+            padding: 4px 8px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .env-var-status.configured {
+            background: rgba(76, 175, 80, 0.2);
+            color: var(--accent-green);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+        }
+
+        .env-var-status.empty {
+            background: rgba(158, 158, 158, 0.2);
+            color: var(--text-secondary);
+            border: 1px solid rgba(158, 158, 158, 0.3);
+        }
+
+        .env-var-input-wrapper {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .env-var-input {
+            flex: 1;
+            background: var(--primary-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+            transition: all 0.2s ease;
+        }
+
+        .env-var-input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
+        }
+
+        .env-var-input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.6;
+            font-style: italic;
+        }
+
+        .toggle-visibility-btn {
+            background: var(--tertiary-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s ease;
+            min-width: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .toggle-visibility-btn:hover {
+            background: var(--accent-blue);
+            color: white;
+            transform: scale(1.05);
         }
     </style>
 </head>
@@ -254,56 +490,84 @@
         </div>
 
         <div class="settings-grid">
-            <!-- Current Status Section -->
+            <!-- Speech Recognition Settings -->
             <div class="settings-section">
-                <h2 class="section-title">Current Status</h2>
+                <h2 class="section-title">🎤 Speech Recognition (ASR)</h2>
                 
                 <div class="setting-group">
-                    <span class="setting-label">ASR Provider (Speech Recognition)</span>
-                    <div class="setting-value" id="current-asr">Loading...</div>
+                    <div class="current-status">
+                        <span class="setting-label">Currently Active</span>
+                        <div class="setting-value" id="current-asr">
+                            <span class="current-provider" id="asr-active">Loading...</span>
+                            <span class="status-indicator status-online" id="asr-status">ACTIVE</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="setting-group">
-                    <span class="setting-label">MT Provider (Translation)</span>
-                    <div class="setting-value" id="current-mt">Loading...</div>
-                </div>
-
-                <div class="setting-group">
-                    <span class="setting-label">Audio Sample Rate</span>
-                    <div class="setting-value" id="current-sample-rate">Loading...</div>
-                </div>
-
-                <div class="setting-group">
-                    <span class="setting-label">Languages</span>
-                    <div class="setting-value" id="current-languages">Loading...</div>
-                </div>
-
-                <button class="refresh-btn" onclick="loadSettings()">🔄 Refresh</button>
-            </div>
-
-            <!-- Provider Settings Section -->
-            <div class="settings-section">
-                <h2 class="section-title">Provider Settings</h2>
-                
-                <div class="setting-group">
-                    <label class="setting-label" for="asr-provider">ASR Provider</label>
+                    <label class="setting-label" for="asr-provider">🔄 Change Provider</label>
                     <select class="setting-select" id="asr-provider">
                         <option value="">Loading...</option>
                     </select>
                     <div class="provider-description" id="asr-description"></div>
                 </div>
+            </div>
+
+            <!-- Translation Settings -->
+            <div class="settings-section">
+                <h2 class="section-title">🌐 Translation (MT)</h2>
+                
+                <div class="setting-group">
+                    <div class="current-status">
+                        <span class="setting-label">Currently Active</span>
+                        <div class="setting-value" id="current-mt">
+                            <span class="current-provider" id="mt-active">Loading...</span>
+                            <span class="status-indicator status-online" id="mt-status">ACTIVE</span>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="setting-group">
-                    <label class="setting-label" for="mt-provider">MT Provider</label>
+                    <label class="setting-label" for="mt-provider">🔄 Change Provider</label>
                     <select class="setting-select" id="mt-provider">
                         <option value="">Loading...</option>
                     </select>
                     <div class="provider-description" id="mt-description"></div>
                 </div>
+            </div>
 
-                <button class="save-btn" id="save-providers" onclick="saveProviders()">
-                    Save Provider Settings
-                </button>
+            <!-- Quick Actions & Status -->
+            <div class="settings-section full-width-section">
+                <h2 class="section-title">⚡ Quick Actions & System Info</h2>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                    <div class="setting-group">
+                        <span class="setting-label">🎵 Audio Sample Rate</span>
+                        <div class="setting-value" id="current-sample-rate">Loading...</div>
+                    </div>
+
+                    <div class="setting-group">
+                        <span class="setting-label">🗣️ Languages</span>
+                        <div class="setting-value" id="current-languages">Loading...</div>
+                    </div>
+
+                    <div class="setting-group">
+                        <span class="setting-label">⏱️ Status</span>
+                        <div class="setting-value">
+                            <span class="status-indicator status-online">System Ready</span>
+                            <button class="refresh-btn" onclick="loadSettings()">🔄 Refresh</button>
+                        </div>
+                    </div>
+
+                    <div class="setting-group">
+                        <span class="setting-label">💾 Actions</span>
+                        <div class="setting-value">
+                            <button class="save-btn" id="save-providers" onclick="saveProviders()" style="margin: 0; padding: 8px 16px; font-size: 14px;">
+                                💾 Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Model Status Section -->
@@ -440,7 +704,35 @@
                 
             } catch (error) {
                 console.error('Failed to load environment variables:', error);
-                showNotification('Failed to load environment variables', 'error');
+                
+                // Use mock data for demonstration when backend is unavailable
+                currentEnvVars = {
+                    'ASR_PROVIDER': 'vosk',
+                    'MT_PROVIDER': 'simple_thai',
+                    'AUDIO_SAMPLE_RATE': '16000',
+                    'MIN_SILENCE_MS': '500',
+                    'STATUS_INTERVAL_MS': '100',
+                    'OPENAI_API_KEY': 'sk-...',
+                    'OPENAI_WHISPER_MODEL': 'whisper-1',
+                    'OPENAI_GPT_MODEL': 'gpt-3.5-turbo',
+                    'FASTER_WHISPER_MODEL': 'small.en',
+                    'FASTER_WHISPER_DEVICE': 'cpu',
+                    'FASTER_WHISPER_COMPUTE_TYPE': 'int8',
+                    'FASTER_WHISPER_LANGUAGE': '',
+                    'FASTER_WHISPER_BEAM_SIZE': '',
+                    'FASTER_WHISPER_CHUNK_DURATION': '',
+                    'WHISPER_MODEL_SIZE': '',
+                    'WHISPER_DEVICE': '',
+                    'WHISPER_CHUNK_DURATION': '',
+                    'GCP_PROJECT': '',
+                    'GOOGLE_APPLICATION_CREDENTIALS': '',
+                    'AWS_REGION': '',
+                    'AWS_ACCESS_KEY_ID': '',
+                    'AWS_SECRET_ACCESS_KEY': '',
+                    'HUGGINGFACE_TOKEN': ''
+                };
+                updateEnvironmentVarsDisplay();
+                showNotification('Using mock data - backend unavailable', 'info');
             }
         }
 
@@ -448,61 +740,91 @@
             const container = document.getElementById('env-vars-container');
             container.innerHTML = '';
             
-            // Categorize variables
+            // Categorize variables with emojis and descriptions
             const categories = {
-                'Providers': ['ASR_PROVIDER', 'MT_PROVIDER'],
-                'Audio': ['AUDIO_SAMPLE_RATE', 'MIN_SILENCE_MS', 'STATUS_INTERVAL_MS'],
-                'OpenAI': [
-                    'OPENAI_API_KEY', 
-                    'OPENAI_WHISPER_MODEL', 
-                    'OPENAI_GPT_MODEL'
-                ],
-                'Faster-Whisper': [
-                    'FASTER_WHISPER_MODEL', 
-                    'FASTER_WHISPER_DEVICE', 
-                    'FASTER_WHISPER_COMPUTE_TYPE',
-                    'FASTER_WHISPER_LANGUAGE',
-                    'FASTER_WHISPER_BEAM_SIZE',
-                    'FASTER_WHISPER_CHUNK_DURATION'
-                ],
-                'Official Whisper (Local)': [
-                    'WHISPER_MODEL_SIZE',
-                    'WHISPER_DEVICE', 
-                    'WHISPER_CHUNK_DURATION'
-                ],
-                'Google Cloud': ['GCP_PROJECT', 'GOOGLE_APPLICATION_CREDENTIALS'],
-                'AWS': ['AWS_REGION', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'],
-                'HuggingFace': ['HUGGINGFACE_TOKEN']
+                '⚙️ Core Providers': {
+                    vars: ['ASR_PROVIDER', 'MT_PROVIDER'],
+                    description: 'Primary speech recognition and translation providers'
+                },
+                '🎵 Audio Settings': {
+                    vars: ['AUDIO_SAMPLE_RATE', 'MIN_SILENCE_MS', 'STATUS_INTERVAL_MS'],
+                    description: 'Audio processing and timing configuration'
+                },
+                '🤖 OpenAI': {
+                    vars: ['OPENAI_API_KEY', 'OPENAI_WHISPER_MODEL', 'OPENAI_GPT_MODEL'],
+                    description: 'OpenAI Whisper API and GPT translation settings'
+                },
+                '⚡ Faster-Whisper': {
+                    vars: [
+                        'FASTER_WHISPER_MODEL', 'FASTER_WHISPER_DEVICE', 
+                        'FASTER_WHISPER_COMPUTE_TYPE', 'FASTER_WHISPER_LANGUAGE',
+                        'FASTER_WHISPER_BEAM_SIZE', 'FASTER_WHISPER_CHUNK_DURATION'
+                    ],
+                    description: 'Local Faster-Whisper model configuration'
+                },
+                '🎯 Official Whisper': {
+                    vars: ['WHISPER_MODEL_SIZE', 'WHISPER_DEVICE', 'WHISPER_CHUNK_DURATION'],
+                    description: 'OpenAI official Whisper model settings'
+                },
+                '☁️ Google Cloud': {
+                    vars: ['GCP_PROJECT', 'GOOGLE_APPLICATION_CREDENTIALS'],
+                    description: 'Google Cloud Platform translation service'
+                },
+                '🚀 AWS': {
+                    vars: ['AWS_REGION', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'],
+                    description: 'Amazon Web Services translation configuration'
+                },
+                '🤗 HuggingFace': {
+                    vars: ['HUGGINGFACE_TOKEN'],
+                    description: 'HuggingFace model hub authentication'
+                },
+                '🇹🇭 Thai Translation': {
+                    vars: ['THAI_POLITENESS_GENDER'],
+                    description: 'Thai translation preferences and politeness settings'
+                }
             };
             
-            for (const [category, vars] of Object.entries(categories)) {
-                const categoryDiv = document.createElement('div');
-                categoryDiv.innerHTML = `<h4 style="margin: 20px 0 10px 0; color: var(--accent-blue); font-size: 1rem;">${category}</h4>`;
-                container.appendChild(categoryDiv);
+            for (const [categoryName, categoryData] of Object.entries(categories)) {
+                const categorySection = document.createElement('div');
+                categorySection.className = 'env-category-section';
+                categorySection.innerHTML = `
+                    <div class="env-category-header">
+                        <h4 class="env-category-title">${categoryName}</h4>
+                        <p class="env-category-description">${categoryData.description}</p>
+                    </div>
+                    <div class="env-category-vars"></div>
+                `;
+                container.appendChild(categorySection);
                 
-                vars.forEach(varName => {
+                const varsContainer = categorySection.querySelector('.env-category-vars');
+                
+                categoryData.vars.forEach(varName => {
                     if (varName in currentEnvVars) {
                         const varDiv = document.createElement('div');
-                        varDiv.className = 'setting-group';
+                        varDiv.className = 'env-var-item';
                         
                         const isSecret = varName.includes('API_KEY') || varName.includes('SECRET') || varName.includes('TOKEN');
                         const inputType = isSecret ? 'password' : 'text';
                         
                         varDiv.innerHTML = `
-                            <label class="setting-label" for="env-${varName}">${varName}</label>
-                            <div style="display: flex; gap: 8px; align-items: center;">
+                            <div class="env-var-header">
+                                <label class="env-var-label" for="env-${varName}">${varName}</label>
+                                <span class="env-var-status ${currentEnvVars[varName] ? 'configured' : 'empty'}">
+                                    ${currentEnvVars[varName] ? '✅ Configured' : '⚪ Empty'}
+                                </span>
+                            </div>
+                            <div class="env-var-input-wrapper">
                                 <input 
                                     type="${inputType}" 
-                                    class="setting-value" 
+                                    class="env-var-input" 
                                     id="env-${varName}" 
                                     value="${currentEnvVars[varName]}"
-                                    placeholder="Enter ${varName.toLowerCase()}"
-                                    style="flex: 1;"
+                                    placeholder="Enter ${varName.toLowerCase().replace(/_/g, ' ')}"
                                 />
-                                ${isSecret ? `<button type="button" onclick="togglePasswordVisibility('env-${varName}')" style="padding: 8px; background: var(--tertiary-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">👁️</button>` : ''}
+                                ${isSecret ? `<button type="button" class="toggle-visibility-btn" onclick="togglePasswordVisibility('env-${varName}')">👁️</button>` : ''}
                             </div>
                         `;
-                        container.appendChild(varDiv);
+                        varsContainer.appendChild(varDiv);
                     }
                 });
             }
