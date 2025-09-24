@@ -61,6 +61,33 @@ Environment variables control providers (set in `.env`). Restart the stack after
 | `WHISPER_CPP_MODEL_PATH` | Path to `ggml-*.bin` file | Required for Whisper.cpp mode. |
 | `MARIAN_MODEL_DIR` | Local MarianMT snapshot path | Defaults to `models/marian`. |
 
+### CTranslate2 (offline MT, optional)
+For faster offline translation, you can use a CTranslate2 model instead of MarianMT.
+
+1) Convert a HF model (e.g., Helsinki-NLP/opus-mt-en-th) to CTranslate2:
+
+```bash
+python scripts/convert_to_ctranslate2.py \\
+   --model Helsinki-NLP/opus-mt-en-th \\
+   --output models/ctranslate2/en-th \\
+   --quantization int8_float16 \\
+   --copy-spm
+```
+
+2) Configure env (local or Docker env file):
+
+```bash
+export MT_PROVIDER=ctranslate2
+export CT2_MODEL_DIR=$(pwd)/models/ctranslate2/en-th
+export CT2_COMPUTE_TYPE=int8_float16
+```
+
+If the model is gated on Hugging Face, authenticate first:
+
+```bash
+huggingface-cli login  # paste your token
+```
+
 ### Cloud Credentials
 - **OpenAI Whisper API**: set `OPENAI_API_KEY` and optionally `OPENAI_WHISPER_MODEL`.
 - **Google Translate**: set `MT_PROVIDER=gtranslate`, `GCP_PROJECT`, and `GOOGLE_APPLICATION_CREDENTIALS` pointing to service account JSON.

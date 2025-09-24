@@ -12,6 +12,7 @@ from typing import Optional
 
 import requests
 from huggingface_hub import snapshot_download
+import os
 
 ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = ROOT / "models"
@@ -19,11 +20,19 @@ WHISPER_DIR = MODELS_DIR / "whisper.cpp"
 VOSK_DIR = MODELS_DIR / "vosk"
 MARIAN_DIR = MODELS_DIR / "marian"
 
-VOSK_ZIP = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
-WHISPER_BIN = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin"
+VOSK_ZIP = (
+    "https://alphacephei.com/vosk/models/"
+    "vosk-model-small-en-us-0.15.zip"
+)
+WHISPER_BIN = (
+    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/"
+    "ggml-small.en.bin"
+)
 
 
-def download_file(url: str, destination: Path, *, chunk_size: int = 1 << 20) -> None:
+def download_file(
+    url: str, destination: Path, *, chunk_size: int = 1 << 20
+) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     with requests.get(url, stream=True, timeout=60) as response:
         response.raise_for_status()
@@ -75,16 +84,27 @@ def ensure_marian_model(force: bool) -> Path:
         print(f"MarianMT model already present at {target}")
         return target
     print("Downloading MarianMT model (Helsinki-NLP/opus-mt-en-th)…")
+    # Support either HUGGINGFACE_TOKEN or HUGGINGFACE_HUB_TOKEN
+    token = (
+        os.environ.get("HUGGINGFACE_TOKEN")
+        or os.environ.get("HUGGINGFACE_HUB_TOKEN")
+    )
     snapshot_download(
         repo_id="Helsinki-NLP/opus-mt-en-th",
         local_dir=str(target),
         local_dir_use_symlinks=False,
         resume_download=True,
+        token=token,
     )
     return target
 
 
-def main(force: bool = False, skip_vosk: bool = False, skip_whisper: bool = False, skip_marian: bool = False) -> None:
+def main(
+    force: bool = False,
+    skip_vosk: bool = False,
+    skip_whisper: bool = False,
+    skip_marian: bool = False,
+) -> None:
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     if not skip_vosk:
         ensure_vosk_model(force)
@@ -96,10 +116,25 @@ def main(force: bool = False, skip_vosk: bool = False, skip_whisper: bool = Fals
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Download offline ASR/MT models.")
-    parser.add_argument("--force", action="store_true", help="Re-download even if files exist")
-    parser.add_argument("--skip-vosk", action="store_true", help="Skip Vosk model")
-    parser.add_argument("--skip-whisper", action="store_true", help="Skip Whisper.cpp model")
-    parser.add_argument("--skip-marian", action="store_true", help="Skip MarianMT model")
+    parser = argparse.ArgumentParser(
+        description="Download offline ASR/MT models."
+    )
+    parser.add_argument(
+        "--force", action="store_true", help="Re-download even if files exist"
+    )
+    parser.add_argument(
+        "--skip-vosk", action="store_true", help="Skip Vosk model"
+    )
+    parser.add_argument(
+        "--skip-whisper", action="store_true", help="Skip Whisper.cpp model"
+    )
+    parser.add_argument(
+        "--skip-marian", action="store_true", help="Skip MarianMT model"
+    )
     args = parser.parse_args()
-    main(force=args.force, skip_vosk=args.skip_vosk, skip_whisper=args.skip_whisper, skip_marian=args.skip_marian)
+    main(
+        force=args.force,
+        skip_vosk=args.skip_vosk,
+        skip_whisper=args.skip_whisper,
+        skip_marian=args.skip_marian,
+    )

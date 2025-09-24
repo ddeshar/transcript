@@ -99,6 +99,7 @@ docker-compose.override.yml
 models/vosk/
 models/whisper.cpp/
 models/marian/
+models/*
 *.bin
 *.mdl
 *.fst
