@@ -57,6 +57,12 @@ class WhisperAPIStream(ASRStream):
         )
         text = (response.get("text") if isinstance(response, dict) else getattr(response, "text", "")) or ""
         text = text.strip()
+        
+        # DEBUG: Log suspicious disclaimer content
+        if "disclaimer" in text.lower() or "sites.google.com" in text.lower():
+            import logging
+            logging.warning(f"[DEBUG] Disclaimer detected from OpenAI: '{text}' - Audio size: {len(wav_bytes)} bytes")
+        
         if not text:
             return
         self._seq += 1

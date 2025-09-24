@@ -8,7 +8,7 @@
   --muted: #94a3b8;
   --danger: #f87171;
   --warning: #facc15;
-  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: "Noto Sans Thai", "Noto Sans", "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
 body {
@@ -142,6 +142,33 @@ button.primary {
   background: var(--accent);
   color: #0f172a;
   border-color: rgba(52, 211, 153, 0.6);
+}
+
+/* Teleprompter button styling */
+#tpLink {
+  background: linear-gradient(135deg, #8b5cf6, #a855f7);
+  color: white;
+  border: 1px solid rgba(139, 92, 246, 0.6);
+  padding: 10px 18px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#tpLink:hover {
+  background: linear-gradient(135deg, #7c3aed, #9333ea);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(139, 92, 246, 0.4);
+}
+
+#tpLink::before {
+  content: "📺";
+  font-size: 1.1em;
 }
 
 .toggle {

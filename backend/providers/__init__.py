@@ -58,18 +58,18 @@ def create_asr_provider(
             beam_size=beam_size,
             chunk_duration=chunk_duration,
         )
-    if name in {"whisper_api", "openai"}:
+    if name == "whisper_api":
         return WhisperCloudASRProvider(
             api_key=settings.get("OPENAI_API_KEY"),
             model=settings.get("OPENAI_WHISPER_MODEL", "whisper-1"),
         )
-    if name in {"whisper_gpt", "whisper_translate"}:
+    if name == "whisper_gpt":
         return WhisperGPTProvider(
             api_key=settings.get("OPENAI_API_KEY"),
             whisper_model=settings.get("OPENAI_WHISPER_MODEL", "whisper-1"),
             gpt_model=settings.get("OPENAI_GPT_MODEL", "gpt-3.5-turbo"),
         )
-    if name in {"whisper_local", "whisper"}:
+    if name == "whisper_local":
         model_size = settings.get("WHISPER_MODEL_SIZE", "base")
         device = settings.get("WHISPER_DEVICE", "cpu")
         chunk_duration = float(
@@ -124,7 +124,7 @@ def create_mt_provider(
             "MARIAN_MODEL_NAME", "Helsinki-NLP/opus-mt-en-th"
         )
         return MarianMTProvider(model_dir=model_dir, model_name=model_name)
-    if name in {"ctranslate2", "ct2"}:
+    if name == "ctranslate2":
         model_dir = Path(
             settings.get(
                 "CT2_MODEL_DIR",
@@ -148,20 +148,20 @@ def create_mt_provider(
             max_decoding_length=max_len,
             source_prefix=source_prefix,
         )
-    if name in {"gtranslate", "google"}:
+    if name == "gtranslate":
         return GoogleTranslateProvider(project_id=settings.get("GCP_PROJECT"))
-    if name in {"awstranslate", "aws"}:
+    if name == "awstranslate":
         return AWSTranslateProvider(
             region_name=settings.get("AWS_REGION"),
             aws_access_key_id=settings.get("AWS_ACCESS_KEY_ID"),
             aws_secret_access_key=settings.get("AWS_SECRET_ACCESS_KEY"),
         )
-    if name in {"openai_gpt", "gpt", "openai"}:
+    if name == "openai_gpt":
         return OpenAIGPTProvider(
             api_key=settings.get("OPENAI_API_KEY"),
             model=settings.get("OPENAI_GPT_MODEL", "gpt-3.5-turbo")
         )
-    if name in {"simple_thai", "simple"}:
+    if name == "simple_thai":
         return SimpleThaiProvider()
     raise ValueError(f"Unsupported MT provider: {name}")
 

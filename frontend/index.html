@@ -4,6 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Realtime English → Thai Subtitles</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@100..900&family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
@@ -13,6 +16,7 @@
       <p class="subtitle">Speak in English, read subtitles in Thai instantly.</p>
     </div>
     <div class="header-controls">
+      <a href="/static/provider-config.html" class="settings-link">🎯 Providers</a>
       <a href="/settings" class="settings-link">⚙️ Settings</a>
       <span id="statusChip" class="status status-idle">Idle</span>
     </div>
@@ -25,7 +29,7 @@
         <button id="stopBtn" disabled>Stop</button>
         <button id="clearBtn">Clear</button>
         <button id="saveBtn" disabled>Save (.txt)</button>
-        <a id="tpLink" class="button" target="_blank" rel="noopener" style="display:none">Teleprompter</a>
+        <a id="tpLink" class="button" target="_blank" rel="noopener" style="display:none">Open Teleprompter</a>
       </div>
       <div class="control-row secondary">
         <label class="toggle">

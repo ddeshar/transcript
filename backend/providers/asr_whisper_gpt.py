@@ -88,6 +88,12 @@ class WhisperGPTStream(ASRStream):
             )
             
             english_text = transcription_response.text.strip()
+            
+            # DEBUG: Track disclaimer content source  
+            if "disclaimer" in english_text.lower() or "sites.google.com" in english_text.lower():
+                import logging
+                logging.warning(f"[DEBUG WHISPER_GPT] Disclaimer from Whisper: '{english_text}' - Audio: {len(wav_bytes)}b")
+            
             if not english_text:
                 return
                 
@@ -116,12 +122,25 @@ class WhisperGPTStream(ASRStream):
                 "the", "a", "an", "and", "or", "but", "so", "to", "of"
             }
             
-            # Check if it's mostly noise or very short
-            if (len(words) < 4 or  # Require at least 4 words
-                len(english_text.strip()) < 15 or  # Require at least 15 characters
-                len([w for w in words if w.lower() not in noise_words]) < 3 or  # At least 3 meaningful words
-                any(word.lower() in ["meow", "mew", "woof", "bark"] for word in words)):  # Animal sounds
-                return  # Skip translation for noise/short phrases
+            # Ultra-aggressive noise filtering
+            sound_words = ["meow", "mew", "woof", "bark", "click", "clicking"]
+            short_phrases = ["you", "thank you", "thanks", "bye", "hello",
+                             "hi"]
+            disclaimer_keywords = ["disclaimer", "privacy policy", "terms", 
+                                 "copyright", "sites.google.com", "please see",
+                                 "complete disclaimer", "all rights reserved"]
+            
+            # Check for disclaimer/legal content
+            text_lower = english_text.lower()
+            has_disclaimer = any(keyword in text_lower for keyword in disclaimer_keywords)
+            
+            if (len(words) < 3 or  # Require at least 3 words
+                len(english_text.strip()) < 10 or  # At least 10 chars
+                len([w for w in words if w.lower() not in noise_words]) < 2 or
+                any(word.lower() in sound_words for word in words) or
+                english_text.lower().strip() in short_phrases or
+                has_disclaimer):  # Block disclaimer content
+                return  # Skip translation completely
                 
             thai_text = await self._translate_to_thai(english_text)
             
@@ -177,13 +196,15 @@ class WhisperGPTStream(ASRStream):
             gender = os.getenv("THAI_POLITENESS_GENDER", "female").lower()
             politeness_particle = "ครับ" if gender in ["male", "m", "ครับ"] else "ค่ะ"
             
-            system_prompt = f"""You are a Thai translator for live subtitles.
+            system_prompt = f"""You are a Thai translator for live subtitles with strict noise filtering.
 Rules:
-1. Translate English to natural Thai
-2. Use ONLY {politeness_particle} for politeness (NEVER use ค่ะ/ครับ or mixed forms)
-3. Keep it concise for subtitles
-4. Return only the Thai translation
-5. Do NOT include both gender particles - use {politeness_particle} only"""
+1. ONLY translate meaningful English speech - REJECT background noise, single words, animal sounds, clicking sounds, empty content, or gibberish
+2. REJECT disclaimers, legal text, privacy policies, website URLs, copyright notices
+3. If input is noise/clicks/legal text/disclaimers/meaningless: return empty string ""
+4. For valid speech: translate to natural Thai using ONLY {politeness_particle} for politeness
+5. NEVER use ค่ะ/ครับ or mixed gender forms - use {politeness_particle} only
+6. Keep translations concise for subtitles
+7. Return empty string for: clicks, "you", "um", "ah", animal sounds, disclaimers, URLs, or any non-conversational audio"""
 
             response = await self.client.chat.completions.create(
                 model=self.gpt_model,

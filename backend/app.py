@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
-import contextlib
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional, Dict
+from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,62 +17,41 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 
 from .providers import create_asr_provider, create_mt_provider
-from .providers.asr_base import ASRResult, ASRStream
+from .providers.asr_base import ASRStream
 from .providers.mt_base import MTProvider
-from .utils import SessionTranscript, format_timestamp, jsonify_log, session_id, utc_timestamp_ms
+from .utils import (
+    SessionTranscript,
+    jsonify_log,
+    session_id,
+    utc_timestamp_ms,
+)
 from .vad import VoiceActivityDetector
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
 
-# Followers hub: for each transcription session ID, keep a set of queues to broadcast
-# real-time messages to follower WebSocket connections (e.g., teleprompter clients).
+# Followers hub maps each transcription session ID to follower queues that
+# should receive real-time messages (e.g., teleprompter clients).
 SESSION_FOLLOWERS: Dict[str, set] = {}
-
-
-def auto_save_transcript(session_transcript: SessionTranscript, 
-                        session_id_str: str) -> None:
-    """Auto-save transcript to subtitles directory (append to same session file)"""
-    try:
-        # Create subtitles directory if it doesn't exist
-        subtitles_dir = Path("/app/subtitles")
-        subtitles_dir.mkdir(exist_ok=True)
-        
-        # Use session-based filename (same file for entire session)
-        filename = f"transcript_session_{session_id_str[:8]}.txt"
-        file_path = subtitles_dir / filename
-        
-        # Save transcript content (overwrite with full content each time)
-        content = session_transcript.to_text()
-        if content.strip():  # Only save if there's actual content
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(f"Session: {session_id_str}\n")
-                f.write(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write("="*50 + "\n\n")
-                f.write(content)
-            print(f"💾 Updated transcript file: {filename}")
-    except Exception as e:
-        print(f"❌ Failed to auto-save transcript: {e}")
-
-
-@dataclass
-class SessionData:
-    sample_rate: int = 16000
-    transcript: SessionTranscript = None
-    
-    def __post_init__(self):
-        if self.transcript is None:
-            self.transcript = SessionTranscript()
 
 
 class Settings(BaseSettings):
     asr_provider: str = Field(default="mock", alias="ASR_PROVIDER")
     mt_provider: str = Field(default="mock", alias="MT_PROVIDER")
-    cors_origins: str = Field(default="http://localhost:8000", alias="CORS_ORIGINS")
+    cors_origins: str = Field(
+        default="http://localhost:8000",
+        alias="CORS_ORIGINS",
+    )
     audio_sample_rate: int = Field(default=16000, alias="AUDIO_SAMPLE_RATE")
     min_silence_ms: int = Field(default=600, alias="MIN_SILENCE_MS")
-    status_broadcast_interval_ms: int = Field(default=1000, alias="STATUS_INTERVAL_MS")
-    thai_politeness_gender: str = Field(default="female", alias="THAI_POLITENESS_GENDER")
+    status_broadcast_interval_ms: int = Field(
+        default=1000,
+        alias="STATUS_INTERVAL_MS",
+    )
+    thai_politeness_gender: str = Field(
+        default="female",
+        alias="THAI_POLITENESS_GENDER",
+    )
 
     class Config:
         case_sensitive = False
@@ -97,7 +76,11 @@ if settings.cors_origins:
     )
 
 if FRONTEND_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+    app.mount(
+        "/static",
+        StaticFiles(directory=str(FRONTEND_DIR)),
+        name="static",
+    )
 
 
 ASR_PROVIDER = create_asr_provider(
@@ -119,7 +102,13 @@ async def reload_providers() -> None:
     # Reload settings from environment
     new_settings = Settings()
     
-    print(f"🔄 Reloading providers: ASR={new_settings.asr_provider}, MT={new_settings.mt_provider}")
+    print(
+        "🔄 Reloading providers: ASR=",
+        new_settings.asr_provider,
+        ", MT=",
+        new_settings.mt_provider,
+        sep="",
+    )
     
     # Create new providers
     new_asr = create_asr_provider(
@@ -129,7 +118,7 @@ async def reload_providers() -> None:
     )
     new_mt = create_mt_provider(
         new_settings.mt_provider,
-        base_dir=BASE_DIR, 
+        base_dir=BASE_DIR,
         settings=os.environ,
     )
     
@@ -141,7 +130,7 @@ async def reload_providers() -> None:
     ASR_PROVIDER = new_asr
     MT_PROVIDER = new_mt
     
-    print(f"✅ Providers reloaded successfully")
+    print("✅ Providers reloaded successfully")
 
 
 @app.on_event("startup")
@@ -182,7 +171,7 @@ async def get_settings() -> JSONResponse:
     # Check which providers are actually available based on dependencies
     available_asr_providers = ["mock"]  # Mock is always available
     # Always available providers
-    available_mt_providers = ["mock", "simple_thai", "simple"]
+    available_mt_providers = ["mock", "simple_thai"]
     
     # Check ASR providers
     vosk_model_path = os.environ.get(
@@ -192,7 +181,9 @@ async def get_settings() -> JSONResponse:
         available_asr_providers.append("vosk")
     
     if os.environ.get("OPENAI_API_KEY"):
-        available_asr_providers.extend(["whisper_api", "openai", "whisper_gpt", "hybrid"])
+        available_asr_providers.extend(
+            ["whisper_api", "whisper_gpt", "hybrid"]
+        )
     
     # Check for whisper.cpp model
     whisper_cpp_path = BASE_DIR / "models" / "whisper.cpp"
@@ -219,26 +210,26 @@ async def get_settings() -> JSONResponse:
     )
     if (Path(marian_model_path).exists() and
             any(Path(marian_model_path).glob("*"))):
-        available_mt_providers.extend(["marian", "opus"])
+        available_mt_providers.append("marian")
     
     ct2_model_path = os.environ.get(
         "CT2_MODEL_DIR",
         str(BASE_DIR / "models" / "ctranslate2" / "en-th")
     )
     if Path(ct2_model_path).exists() and any(Path(ct2_model_path).glob("*")):
-        available_mt_providers.extend(["ctranslate2", "ct2"])
+        available_mt_providers.append("ctranslate2")
     
     # Check cloud providers
     if (os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or
             os.environ.get("GCP_PROJECT")):
-        available_mt_providers.extend(["gtranslate", "google"])
+        available_mt_providers.append("gtranslate")
     
     if (os.environ.get("AWS_ACCESS_KEY_ID") and
             os.environ.get("AWS_SECRET_ACCESS_KEY")):
-        available_mt_providers.extend(["awstranslate", "aws"])
+        available_mt_providers.append("awstranslate")
     
     if os.environ.get("OPENAI_API_KEY"):
-        available_mt_providers.extend(["openai_gpt", "gpt", "openai"])
+        available_mt_providers.append("openai_gpt")
     
     # Get model paths and statuses
     vosk_model_path = os.environ.get(
@@ -263,6 +254,67 @@ async def get_settings() -> JSONResponse:
         "available": {
             "asr_providers": available_asr_providers,
             "mt_providers": available_mt_providers,
+        },
+        "dependencies": {
+            "asr_mt_compatibility": {
+                # ASR providers that do translation internally (no MT needed)
+                "whisper_gpt": {
+                    "requires_mt": False,
+                    "recommended_mt": "simple_thai",  # Pass-through
+                    "description": "Whisper + GPT with built-in Thai translation"
+                },
+                # Standard ASR providers (require separate MT)
+                "whisper_api": {
+                    "requires_mt": True,
+                    "recommended_mt": "openai_gpt",
+                    "compatible_mt": ["openai_gpt", "awstranslate", "simple_thai"],
+                    "description": "OpenAI Whisper API (English only)"
+                },
+                "vosk": {
+                    "requires_mt": True,
+                    "recommended_mt": "openai_gpt",
+                    "compatible_mt": ["openai_gpt", "awstranslate", "marian", "ctranslate2", "simple_thai"],
+                    "description": "Local Vosk ASR (English only)"
+                },
+                "faster_whisper": {
+                    "requires_mt": True,
+                    "recommended_mt": "openai_gpt",
+                    "compatible_mt": ["openai_gpt", "awstranslate", "marian", "ctranslate2", "simple_thai"],
+                    "description": "Fast local Whisper (English only)"
+                },
+                "whisper_local": {
+                    "requires_mt": True,
+                    "recommended_mt": "openai_gpt", 
+                    "compatible_mt": ["openai_gpt", "awstranslate", "marian", "ctranslate2", "simple_thai"],
+                    "description": "Local OpenAI Whisper (English only)"
+                },
+                "whispercpp": {
+                    "requires_mt": True,
+                    "recommended_mt": "marian",
+                    "compatible_mt": ["openai_gpt", "awstranslate", "marian", "ctranslate2", "simple_thai"],
+                    "description": "Whisper.cpp (fast, local)"
+                },
+                "hybrid": {
+                    "requires_mt": False,
+                    "recommended_mt": "simple_thai",
+                    "description": "Fast local + quality cloud hybrid"
+                },
+                "mock": {
+                    "requires_mt": True,
+                    "recommended_mt": "mock",
+                    "compatible_mt": ["mock"],
+                    "description": "Testing provider"
+                }
+            },
+            "provider_categories": {
+                "cloud_asr": ["whisper_api", "whisper_gpt"],
+                "local_asr": ["vosk", "faster_whisper", "whisper_local", "whispercpp"],  
+                "hybrid_asr": ["hybrid"],
+                "cloud_mt": ["openai_gpt", "awstranslate"],
+                "local_mt": ["marian", "ctranslate2"],
+                "passthrough_mt": ["simple_thai"],
+                "testing": ["mock"]
+            }
         },
         "models": {
             "vosk": {
@@ -485,9 +537,44 @@ class ConnectionState:
     last_partial: str = ""
     speech_active: bool = False
     last_status: str = "idle"
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    transcript_path: Path | None = None
 
     def reset_partial(self) -> None:
         self.last_partial = ""
+
+
+def auto_save_transcript(state: ConnectionState) -> None:
+    """Persist the running transcript to a single file per session."""
+
+    try:
+        subtitles_dir = Path("/app/subtitles")
+        subtitles_dir.mkdir(parents=True, exist_ok=True)
+
+        if state.transcript_path is None:
+            filename = f"transcript_session_{state.session_id[:8]}.txt"
+            state.transcript_path = subtitles_dir / filename
+
+        content = state.transcript.to_text().strip()
+        if not content:
+            return
+
+        fmt = "%Y-%m-%d %H:%M:%S UTC"
+        header = (
+            f"Session: {state.session_id}\n"
+            f"Started: {state.created_at.strftime(fmt)}\n"
+            f"Saved: {datetime.utcnow().strftime(fmt)}\n"
+        )
+        divider = "=" * 50 + "\n\n"
+
+        with open(state.transcript_path, "w", encoding="utf-8") as handle:
+            handle.write(header)
+            handle.write(divider)
+            handle.write(content)
+
+        print("💾 Auto-saved transcript to", state.transcript_path.name)
+    except OSError as err:  # pragma: no cover - log only
+        print(f"❌ Failed to auto-save transcript: {err}")
 
 
 async def websocket_sender(websocket: WebSocket, queue: "asyncio.Queue[Optional[dict]]") -> None:
@@ -534,6 +621,24 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 english_text = result.text.strip()
                 if not english_text:
                     continue
+                
+                # EMERGENCY FILTER: Block any disclaimer content
+                disclaimer_patterns = [
+                    "please see the complete disclaimer",
+                    "sites.google.com",
+                    "all rights reserved",
+                    "privacy policy",
+                    "terms of service",
+                    "disclaimer"
+                ]
+                if any(pattern in english_text.lower() for pattern in disclaimer_patterns):
+                    # Log blocked content for debugging
+                    jsonify_log("WARNING", {
+                        "message": "Blocked disclaimer content",
+                        "text": english_text,
+                        "session": sess_id
+                    })
+                    continue  # Skip this result completely
                 if not result.is_final and english_text == state.last_partial:
                     continue
                 if result.is_final:
@@ -563,8 +668,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             await q.put(message)
                 if result.is_final:
                     state.transcript.add_segment(message)
-                    # Auto-save transcript after each final segment
-                    auto_save_transcript(state.transcript, sess_id)
+                    auto_save_transcript(state)
                     await send({"type": "status", "status": "listening"})
         except asyncio.CancelledError:
             pass

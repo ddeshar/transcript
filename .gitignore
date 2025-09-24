@@ -119,6 +119,9 @@ sample_audio/
 *.log
 logs/
 
+# Generated transcripts
+subtitles/
+
 # Environment files
 .env.local
 .env.development.local
