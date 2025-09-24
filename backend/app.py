@@ -75,6 +75,38 @@ MT_PROVIDER: MTProvider = create_mt_provider(
 )
 
 
+async def reload_providers() -> None:
+    """Dynamically reload ASR and MT providers with new settings."""
+    global ASR_PROVIDER, MT_PROVIDER
+    
+    # Reload settings from environment
+    new_settings = Settings()
+    
+    print(f"🔄 Reloading providers: ASR={new_settings.asr_provider}, MT={new_settings.mt_provider}")
+    
+    # Create new providers
+    new_asr = create_asr_provider(
+        new_settings.asr_provider,
+        base_dir=BASE_DIR,
+        settings=os.environ,
+    )
+    new_mt = create_mt_provider(
+        new_settings.mt_provider,
+        base_dir=BASE_DIR, 
+        settings=os.environ,
+    )
+    
+    # Setup new providers
+    await new_asr.setup()
+    await new_mt.setup()
+    
+    # Replace global providers
+    ASR_PROVIDER = new_asr
+    MT_PROVIDER = new_mt
+    
+    print(f"✅ Providers reloaded successfully")
+
+
 @app.on_event("startup")
 async def startup_event() -> None:
     await ASR_PROVIDER.setup()
@@ -123,7 +155,7 @@ async def get_settings() -> JSONResponse:
         available_asr_providers.append("vosk")
     
     if os.environ.get("OPENAI_API_KEY"):
-        available_asr_providers.extend(["whisper_api", "openai"])
+        available_asr_providers.extend(["whisper_api", "openai", "whisper_gpt", "hybrid"])
     
     # Check for whisper.cpp model
     whisper_cpp_path = BASE_DIR / "models" / "whisper.cpp"
@@ -134,6 +166,13 @@ async def get_settings() -> JSONResponse:
     try:
         import faster_whisper  # noqa
         available_asr_providers.append("faster_whisper")
+    except ImportError:
+        pass
+    
+    # Check for official OpenAI Whisper (local, no API key needed)
+    try:
+        import whisper  # noqa
+        available_asr_providers.append("whisper_local")
     except ImportError:
         pass
     
@@ -160,6 +199,9 @@ async def get_settings() -> JSONResponse:
     if (os.environ.get("AWS_ACCESS_KEY_ID") and
             os.environ.get("AWS_SECRET_ACCESS_KEY")):
         available_mt_providers.extend(["awstranslate", "aws"])
+    
+    if os.environ.get("OPENAI_API_KEY"):
+        available_mt_providers.extend(["openai_gpt", "gpt", "openai"])
     
     # Get model paths and statuses
     vosk_model_path = os.environ.get(
@@ -344,12 +386,22 @@ async def update_env_vars(env_update: dict) -> JSONResponse:
         with open(env_file_path, 'w', encoding='utf-8') as f:
             f.writelines(env_lines)
         
+        # Dynamically reinitialize providers if ASR or MT changed
+        provider_reloaded = False
+        if "ASR_PROVIDER" in changes or "MT_PROVIDER" in changes:
+            try:
+                await reload_providers()
+                provider_reloaded = True
+            except Exception as e:
+                print(f"⚠️ Failed to reload providers: {e}")
+
         return JSONResponse({
             "message": f"Updated {len(changes)} environment variables " +
                        f"in {env_file_path.name}",
             "changes": changes,
             "file_updated": str(env_file_path),
-            "restart_recommended": len(changes) > 0,
+            "providers_reloaded": provider_reloaded,
+            "restart_recommended": not provider_reloaded and len(changes) > 0,
         })
         
     except Exception as e:

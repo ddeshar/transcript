@@ -700,14 +700,16 @@
             const mtProvider = document.getElementById('mt-provider').value;
             
             const newSettings = {
-                asr_provider: asrProvider,
-                mt_provider: mtProvider
+                variables: {
+                    ASR_PROVIDER: asrProvider,
+                    MT_PROVIDER: mtProvider
+                }
             };
 
             try {
                 document.getElementById('save-providers').disabled = true;
                 
-                const response = await fetch('/api/settings', {
+                const response = await fetch('/api/env', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -721,11 +723,16 @@
                 
                 const result = await response.json();
                 
-                if (result.restart_required) {
+                if (result.providers_reloaded) {
+                    showNotification('Settings saved and providers updated instantly!', 'success');
+                } else if (result.restart_recommended) {
                     showNotification('Settings saved! Restart container to apply changes.', 'info');
                 } else {
                     showNotification('Settings saved successfully!', 'success');
                 }
+                
+                // Reload the page to show updated current settings
+                setTimeout(() => window.location.reload(), 1500);
                 
             } catch (error) {
                 console.error('Failed to save settings:', error);

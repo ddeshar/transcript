@@ -37,12 +37,7 @@ class WhisperGPTStream(ASRStream):
         self._lock = asyncio.Lock()
         
         # Translation prompt for better Thai translation
-        self.translation_prompt = """You are a professional English-to-Thai translator. 
-Translate the following English text to natural, fluent Thai. 
-Keep the translation concise and appropriate for real-time subtitles.
-Only return the Thai translation, nothing else.
-
-English text: """
+        self.translation_prompt = """Translate this English text to natural Thai for subtitles. Return only the Thai translation: """
 
     async def push_audio(self, chunk: bytes, timestamp_ms: int) -> None:
         self._buffer.extend(chunk)
@@ -78,10 +73,16 @@ English text: """
         wav_bytes = await to_thread(self._pcm16_to_wav, payload)
         
         try:
+            # Create proper file-like object for OpenAI API
+            wav_file = io.BytesIO(wav_bytes)
+            wav_file.name = "audio.wav"
+            wav_file.content_type = "audio/wav"
+            wav_file.seek(0)
+            
             # Use Whisper for transcription
             transcription_response = await self.client.audio.transcriptions.create(
                 model=self.whisper_model,
-                file=io.BytesIO(wav_bytes),
+                file=wav_file,
                 language="en",
                 response_format="json",
             )
@@ -104,21 +105,23 @@ English text: """
             )
             
             # Step 3: GPT translation to Thai (parallel processing)
-            if len(english_text.split()) >= 3:  # Only translate meaningful phrases
+            # Only translate meaningful phrases (at least 2 words and 8 characters)
+            if len(english_text.split()) >= 2 and len(english_text.strip()) >= 8:
                 thai_text = await self._translate_to_thai(english_text)
                 
-                # Send Thai translation
-                await self._queue.put(
-                    ASRResult(
-                        session_id=self.session_id,
-                        text=thai_text,
-                        is_final=is_final,
-                        start_ms=0,
-                        end_ms=len(payload) // (self.sample_rate * 2) * 1000,
-                        confidence=0.90,
-                        raw={"language": "th", "type": "translation", "source": english_text}
+                # Only send translation if it's different from English and not empty
+                if thai_text and thai_text != english_text and not thai_text.startswith("Sorry") and not thai_text.startswith("ขอโทษ"):
+                    await self._queue.put(
+                        ASRResult(
+                            session_id=self.session_id,
+                            text=thai_text,
+                            is_final=is_final,
+                            start_ms=0,
+                            end_ms=len(payload) // (self.sample_rate * 2) * 1000,
+                            confidence=0.90,
+                            raw={"language": "th", "type": "translation", "source": english_text}
+                        )
                     )
-                )
                 
         except Exception as e:
             # Fallback: return what we have
@@ -136,21 +139,32 @@ English text: """
 
     async def _translate_to_thai(self, english_text: str) -> str:
         """Use GPT for high-quality Thai translation."""
+        if not english_text or len(english_text.strip()) < 3:
+            return ""  # Don't translate very short or empty text
+            
         try:
             response = await self.client.chat.completions.create(
                 model=self.gpt_model,
                 messages=[
-                    {"role": "user", "content": self.translation_prompt + english_text}
+                    {"role": "system", "content": "You are a translator. Translate English to Thai for subtitles. Be concise."},
+                    {"role": "user", "content": f"Translate to Thai: {english_text}"}
                 ],
-                max_tokens=100,
-                temperature=0.1,  # Low temperature for consistent translation
+                max_tokens=60,  # Shorter for faster response
+                temperature=0.1,
             )
             
             thai_text = response.choices[0].message.content.strip()
-            return thai_text or english_text  # Fallback to English if translation fails
+            # Filter out error messages and invalid responses
+            if (thai_text and 
+                not thai_text.startswith("Sorry") and 
+                not thai_text.startswith("ขอโทษ") and
+                not thai_text.startswith("I") and
+                len(thai_text) > 0):
+                return thai_text
+            return ""  # Don't return invalid translations
             
         except Exception:
-            return english_text  # Fallback to English
+            return ""  # Don't return errors
 
     def _pcm16_to_wav(self, pcm_data: bytes) -> bytes:
         """Convert PCM16 audio data to WAV format."""

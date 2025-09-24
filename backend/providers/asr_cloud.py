@@ -42,9 +42,16 @@ class WhisperAPIStream(ASRStream):
         if not payload:
             return
         wav_bytes = await to_thread(self._pcm16_to_wav, payload)
+        # Create a proper file-like object with all necessary attributes for OpenAI API
+        wav_file = io.BytesIO(wav_bytes)
+        wav_file.name = "audio.wav"
+        # Add content type hint for better format detection
+        wav_file.content_type = "audio/wav"
+        # Ensure file pointer is at the beginning
+        wav_file.seek(0)
         response = await self.client.audio.transcriptions.create(
             model=self.model,
-            file=io.BytesIO(wav_bytes),
+            file=wav_file,
             language="en",
             response_format="json",
         )

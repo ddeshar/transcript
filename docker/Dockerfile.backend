@@ -20,7 +20,6 @@ COPY models /app/models
 COPY sample_audio /app/sample_audio
 COPY README.md /app/README.md
 COPY .env.example /app/.env.example
-COPY .env.docker /app/.env
 
 ENV PYTHONPATH=/app
 WORKDIR /app

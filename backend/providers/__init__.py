@@ -15,6 +15,7 @@ from .mt_base import MTProvider
 from .mt_marian import MarianMTProvider
 from .mt_gtranslate import GoogleTranslateProvider
 from .mt_awstranslate import AWSTranslateProvider
+from .mt_openai_gpt import OpenAIGPTProvider
 from .mt_mock import MockMTProvider
 from .mt_ctranslate2 import CTranslate2MTProvider
 from .mt_simple_thai import SimpleThaiProvider
@@ -150,7 +151,16 @@ def create_mt_provider(
     if name in {"gtranslate", "google"}:
         return GoogleTranslateProvider(project_id=settings.get("GCP_PROJECT"))
     if name in {"awstranslate", "aws"}:
-        return AWSTranslateProvider(region_name=settings.get("AWS_REGION"))
+        return AWSTranslateProvider(
+            region_name=settings.get("AWS_REGION"),
+            aws_access_key_id=settings.get("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=settings.get("AWS_SECRET_ACCESS_KEY"),
+        )
+    if name in {"openai_gpt", "gpt", "openai"}:
+        return OpenAIGPTProvider(
+            api_key=settings.get("OPENAI_API_KEY"),
+            model=settings.get("OPENAI_GPT_MODEL", "gpt-3.5-turbo")
+        )
     if name in {"simple_thai", "simple"}:
         return SimpleThaiProvider()
     raise ValueError(f"Unsupported MT provider: {name}")

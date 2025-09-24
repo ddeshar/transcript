@@ -131,7 +131,7 @@ class FasterWhisperStream(ASRStream):
             language=self.language,
             beam_size=self.beam_size,
             vad_filter=False,  # We handle VAD externally
-            word_timestamps=True,
+            word_timestamps=False,  # Disable word-level timestamps for cleaner output
         )
 
         # Extract segments with timing
