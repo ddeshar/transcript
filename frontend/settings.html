@@ -383,7 +383,11 @@
             'mock': 'Mock provider for testing (returns dummy text)',
             'vosk': 'Offline speech recognition using Vosk models',
             'whispercpp': 'Local Whisper.cpp for offline speech recognition',
+            'faster_whisper': 'Fast local Whisper with optimized inference (~300ms, good accuracy)',
+            'whisper_local': 'Official OpenAI Whisper local (~1s, excellent accuracy)',
             'whisper_api': 'OpenAI Whisper API (cloud, requires API key)',
+            'whisper_gpt': 'Whisper API + GPT translation (slow but best Thai quality)',
+            'hybrid': 'Fast English immediately + Quality Thai later (best UX!)',
             'openai': 'OpenAI Whisper API (cloud, requires API key)',
             
             // MT Providers
@@ -395,7 +399,7 @@
             'google': 'Google Cloud Translate API',
             'awstranslate': 'AWS Translate service',
             'aws': 'AWS Translate service',
-            'simple_thai': 'Simple word-mapping Thai translation',
+            'simple_thai': 'Simple word-mapping Thai translation (fast but basic)',
             'simple': 'Simple word-mapping Thai translation'
         };
 
@@ -448,7 +452,11 @@
             const categories = {
                 'Providers': ['ASR_PROVIDER', 'MT_PROVIDER'],
                 'Audio': ['AUDIO_SAMPLE_RATE', 'MIN_SILENCE_MS', 'STATUS_INTERVAL_MS'],
-                'OpenAI': ['OPENAI_API_KEY', 'OPENAI_WHISPER_MODEL'],
+                'OpenAI': [
+                    'OPENAI_API_KEY', 
+                    'OPENAI_WHISPER_MODEL', 
+                    'OPENAI_GPT_MODEL'
+                ],
                 'Faster-Whisper': [
                     'FASTER_WHISPER_MODEL', 
                     'FASTER_WHISPER_DEVICE', 
@@ -456,6 +464,11 @@
                     'FASTER_WHISPER_LANGUAGE',
                     'FASTER_WHISPER_BEAM_SIZE',
                     'FASTER_WHISPER_CHUNK_DURATION'
+                ],
+                'Official Whisper (Local)': [
+                    'WHISPER_MODEL_SIZE',
+                    'WHISPER_DEVICE', 
+                    'WHISPER_CHUNK_DURATION'
                 ],
                 'Google Cloud': ['GCP_PROJECT', 'GOOGLE_APPLICATION_CREDENTIALS'],
                 'AWS': ['AWS_REGION', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'],

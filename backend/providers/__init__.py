@@ -8,6 +8,8 @@ from .asr_whispercpp import WhisperCppASRProvider
 from .asr_cloud import WhisperCloudASRProvider
 from .asr_faster_whisper import FasterWhisperASRProvider
 from .asr_whisper_gpt import WhisperGPTProvider
+from .asr_whisper_local import WhisperLocalProvider
+from .asr_hybrid import HybridASRProvider
 from .asr_mock import MockASRProvider
 from .mt_base import MTProvider
 from .mt_marian import MarianMTProvider
@@ -65,6 +67,44 @@ def create_asr_provider(
             api_key=settings.get("OPENAI_API_KEY"),
             whisper_model=settings.get("OPENAI_WHISPER_MODEL", "whisper-1"),
             gpt_model=settings.get("OPENAI_GPT_MODEL", "gpt-3.5-turbo"),
+        )
+    if name in {"whisper_local", "whisper"}:
+        model_size = settings.get("WHISPER_MODEL_SIZE", "base")
+        device = settings.get("WHISPER_DEVICE", "cpu")
+        chunk_duration = float(
+            settings.get("WHISPER_CHUNK_DURATION", "2.0")
+        )
+        return WhisperLocalProvider(
+            model_size=model_size,
+            device=device,
+            chunk_duration=chunk_duration,
+        )
+    if name == "hybrid":
+        # Create fast provider (faster-whisper)
+        fast_provider = FasterWhisperASRProvider(
+            model_size=settings.get("FASTER_WHISPER_MODEL", "tiny"),
+            device=settings.get("FASTER_WHISPER_DEVICE", "cpu"),
+            compute_type=settings.get("FASTER_WHISPER_COMPUTE_TYPE", "int8"),
+            language=settings.get("FASTER_WHISPER_LANGUAGE", "en"),
+            beam_size=int(settings.get("FASTER_WHISPER_BEAM_SIZE", "1")),
+            chunk_duration=float(
+                settings.get("FASTER_WHISPER_CHUNK_DURATION", "1.0")
+            ),
+        )
+        
+        # Create quality provider (whisper API + GPT) if API key available
+        quality_provider = None
+        if settings.get("OPENAI_API_KEY"):
+            quality_provider = WhisperGPTProvider(
+                api_key=settings.get("OPENAI_API_KEY"),
+                whisper_model=settings.get("OPENAI_WHISPER_MODEL", "whisper-1"),
+                gpt_model=settings.get("OPENAI_GPT_MODEL", "gpt-3.5-turbo"),
+            )
+        
+        return HybridASRProvider(
+            fast_provider=fast_provider,
+            quality_provider=quality_provider,
+            enable_quality=quality_provider is not None,
         )
     raise ValueError(f"Unsupported ASR provider: {name}")
 
