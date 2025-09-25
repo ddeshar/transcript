@@ -12,35 +12,86 @@
 <body>
   <header class="app-header">
     <div>
-      <h1>Live Seminar Platform</h1>
-      <p class="subtitle">Create live seminars with real-time English-Thai subtitles.</p>
+      <h1>🎓 Live Seminar Platform</h1>
+      <p class="subtitle">Create and manage live seminars with real-time English-Thai subtitles and audio recording.</p>
     </div>
     <div class="header-controls">
-      <button id="createRoomBtn" class="primary-button">+ Create New Room</button>
-      <a href="/static/provider-config.html" class="settings-link">🎯 Providers</a>
-      <a href="/settings" class="settings-link">⚙️ Settings</a>
-      <span id="statusChip" class="status status-idle">Idle</span>
+      <button id="createRoomBtn" class="primary-button">
+        <span class="icon">➕</span>
+        <span>Create New Room</span>
+      </button>
+      <button id="adminBtn" class="secondary-button">
+        <span class="icon">👨‍💼</span>
+        <span>Admin Panel</span>
+      </button>
+      <a href="/static/provider-config.html" class="settings-link" title="AI Provider Settings">🎯</a>
+      <a href="/settings" class="settings-link" title="System Settings">⚙️</a>
+      <span id="statusChip" class="status status-idle">Ready</span>
     </div>
   </header>
 
   <main class="app-main">
     <!-- Room Management Section -->
     <section class="room-management" id="roomManagement">
-      <h2>Seminar Rooms</h2>
+      <div class="section-header">
+        <h2>📚 Seminar Rooms</h2>
+        <p class="section-description">Create and manage live seminar rooms with real-time subtitles and audio recording.</p>
+      </div>
       
       <div class="room-creation" id="roomCreation" style="display: none;">
         <div class="creation-form">
-          <h3>Create New Seminar Room</h3>
-          <input type="text" id="roomTitleInput" placeholder="Enter seminar title..." maxlength="100">
+          <div class="form-header">
+            <h3>✨ Create New Seminar Room</h3>
+            <p>Start a new seminar session with live subtitles and audio recording</p>
+          </div>
+          <div class="form-group">
+            <label for="roomTitleInput">Room Title</label>
+            <input type="text" id="roomTitleInput" placeholder="e.g., AI in Education Workshop" maxlength="100" required>
+            <div class="input-hint">Give your seminar a descriptive title</div>
+          </div>
+          <div class="form-group">
+            <label for="roomDescInput">Description (Optional)</label>
+            <textarea id="roomDescInput" placeholder="Brief description of the seminar..." maxlength="500"></textarea>
+          </div>
           <div class="creation-buttons">
-            <button id="confirmCreateBtn" class="primary">Create Room</button>
-            <button id="cancelCreateBtn">Cancel</button>
+            <button id="confirmCreateBtn" class="primary-button">
+              <span class="icon">🚀</span>
+              <span>Create & Start Room</span>
+            </button>
+            <button id="cancelCreateBtn" class="secondary-button">Cancel</button>
           </div>
         </div>
       </div>
 
       <div class="room-list" id="roomList">
-        <div class="loading">Loading rooms...</div>
+        <div class="loading">
+          <div class="spinner"></div>
+          <span>Loading rooms...</span>
+        </div>
+      </div>
+
+      <!-- Admin Panel (hidden by default) -->
+      <div class="admin-panel" id="adminPanel" style="display: none;">
+        <div class="panel-header">
+          <h3>👨‍💼 Admin Panel</h3>
+          <button id="closeAdminBtn" class="close-btn">✕</button>
+        </div>
+        <div class="admin-tabs">
+          <button class="tab-btn active" data-tab="rooms">Rooms</button>
+          <button class="tab-btn" data-tab="files">Audio Files</button>
+          <button class="tab-btn" data-tab="transcripts">Transcripts</button>
+        </div>
+        <div class="admin-content">
+          <div class="tab-content active" id="adminRooms">
+            <div class="admin-room-list"></div>
+          </div>
+          <div class="tab-content" id="adminFiles">
+            <div class="file-browser"></div>
+          </div>
+          <div class="tab-content" id="adminTranscripts">
+            <div class="transcript-list"></div>
+          </div>
+        </div>
       </div>
     </section>
 

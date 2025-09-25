@@ -498,3 +498,184 @@ class AsyncDatabaseService:
                 db.close()
                 
         return await cls.execute_sync(_list_rooms)
+
+    # Participant Analytics Methods
+    @classmethod
+    async def record_participant_event(
+        cls,
+        room_id: str,
+        session_id: str,
+        event_type: str,  # "join" or "leave"
+        participant_id: str,
+        participant_name: str = None,
+        user_agent: str = None,
+        ip_address: str = None,
+        metadata: Dict[str, Any] = None
+    ):
+        """Record a participant join/leave event."""
+        def _record_event():
+            from .database import ParticipantEvent
+            db = next(get_db())
+            try:
+                event = ParticipantEvent(
+                    room_id=room_id,
+                    session_id=session_id,
+                    event_type=event_type,
+                    participant_id=participant_id,
+                    participant_name=participant_name,
+                    user_agent=user_agent,
+                    ip_address=ip_address,
+                    metadata=metadata or {}
+                )
+                db.add(event)
+                db.commit()
+                return event
+            finally:
+                db.close()
+                
+        await cls.execute_sync(_record_event)
+        
+        # Update real-time stats
+        await cls.update_participant_stats(room_id)
+
+    @classmethod
+    async def update_participant_stats(cls, room_id: str):
+        """Update participant statistics for the current time window."""
+        def _update_stats():
+            from .database import ParticipantEvent, ParticipantStats
+            from datetime import datetime, timedelta
+            import math
+            
+            db = next(get_db())
+            try:
+                now = datetime.utcnow()
+                # Round to nearest 5-minute window
+                window_start = now.replace(
+                    minute=(now.minute // 5) * 5, second=0, microsecond=0
+                )
+                
+                # Get or create stats record for this window
+                stats = db.query(ParticipantStats).filter(
+                    ParticipantStats.room_id == room_id,
+                    ParticipantStats.time_window == window_start
+                ).first()
+                
+                if not stats:
+                    stats = ParticipantStats(
+                        room_id=room_id,
+                        time_window=window_start
+                    )
+                    db.add(stats)
+                
+                # Calculate current participants
+                window_end = window_start + timedelta(minutes=5)
+                
+                # Get all events in this window
+                events = db.query(ParticipantEvent).filter(
+                    ParticipantEvent.room_id == room_id,
+                    ParticipantEvent.timestamp >= window_start,
+                    ParticipantEvent.timestamp < window_end
+                ).order_by(ParticipantEvent.timestamp).all()
+                
+                # Calculate stats
+                current_count = 0
+                peak_count = 0
+                total_joins = 0
+                total_leaves = 0
+                
+                for event in events:
+                    if event.event_type == "join":
+                        current_count += 1
+                        total_joins += 1
+                    elif event.event_type == "leave":
+                        current_count = max(0, current_count - 1)
+                        total_leaves += 1
+                    
+                    peak_count = max(peak_count, current_count)
+                
+                # Update stats
+                stats.current_participants = current_count
+                stats.peak_participants = max(stats.peak_participants or 0, peak_count)
+                stats.total_joins = total_joins
+                stats.total_leaves = total_leaves
+                
+                db.commit()
+                return stats
+            finally:
+                db.close()
+                
+        return await cls.execute_sync(_update_stats)
+
+    @classmethod
+    async def get_participant_stats(cls, room_id: str, hours: int = 24):
+        """Get participant statistics for a room over the last N hours."""
+        def _get_stats():
+            from .database import ParticipantStats
+            from datetime import datetime, timedelta
+            
+            db = next(get_db())
+            try:
+                since = datetime.utcnow() - timedelta(hours=hours)
+                
+                return db.query(ParticipantStats).filter(
+                    ParticipantStats.room_id == room_id,
+                    ParticipantStats.time_window >= since
+                ).order_by(ParticipantStats.time_window).all()
+            finally:
+                db.close()
+                
+        return await cls.execute_sync(_get_stats)
+
+    @classmethod
+    async def get_participant_events(cls, room_id: str, hours: int = 24):
+        """Get all participant events for a room."""
+        def _get_events():
+            from .database import ParticipantEvent
+            from datetime import datetime, timedelta
+            
+            db = next(get_db())
+            try:
+                since = datetime.utcnow() - timedelta(hours=hours)
+                
+                return db.query(ParticipantEvent).filter(
+                    ParticipantEvent.room_id == room_id,
+                    ParticipantEvent.timestamp >= since
+                ).order_by(ParticipantEvent.timestamp).all()
+            finally:
+                db.close()
+                
+        return await cls.execute_sync(_get_events)
+
+    @classmethod
+    async def get_current_participant_count(cls, room_id: str):
+        """Get the current number of active participants."""
+        def _get_count():
+            from .database import ParticipantEvent
+            from datetime import datetime, timedelta
+            
+            db = next(get_db())
+            try:
+                # Look at events in the last hour to determine current count
+                since = datetime.utcnow() - timedelta(hours=1)
+                
+                events = db.query(ParticipantEvent).filter(
+                    ParticipantEvent.room_id == room_id,
+                    ParticipantEvent.timestamp >= since
+                ).order_by(ParticipantEvent.timestamp).all()
+                
+                # Track unique participants and their last action
+                participant_status = {}
+                for event in events:
+                    participant_status[event.participant_id] = event.event_type
+                
+                # Count participants whose last action was "join"
+                current_count = sum(
+                    1 for status in participant_status.values() 
+                    if status == "join"
+                )
+                
+                return current_count
+            finally:
+                db.close()
+                
+        return await cls.execute_sync(_get_count)

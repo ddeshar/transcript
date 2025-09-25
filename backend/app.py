@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
+from uuid import uuid4
 
 from fastapi import (
     FastAPI, 
@@ -711,6 +712,76 @@ async def update_room_status(room_id: str, update: RoomStatusUpdate) -> dict:
     return {"success": True, "is_live": updated_room.is_live}
 
 
+# Participant Analytics Endpoints
+@app.get("/api/rooms/{room_id}/analytics")
+async def get_room_analytics(room_id: str, hours: int = 24):
+    """Get participant analytics for a room."""
+    try:
+        # Check if room exists
+        room = await AsyncDatabaseService.get_room(room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Room not found")
+        
+        # Get participant statistics
+        stats = await AsyncDatabaseService.get_participant_stats(room_id, hours)
+        events = await AsyncDatabaseService.get_participant_events(room_id, hours)
+        current_count = await AsyncDatabaseService.get_current_participant_count(room_id)
+        
+        # Calculate summary metrics
+        total_participants = len(set(event.participant_id for event in events))
+        peak_participants = max((s.peak_participants or 0 for s in stats), default=0)
+        
+        # Prepare time series data for charts
+        time_series = []
+        for stat in stats:
+            time_series.append({
+                "timestamp": stat.time_window.isoformat(),
+                "current_participants": stat.current_participants,
+                "peak_participants": stat.peak_participants,
+                "total_joins": stat.total_joins,
+                "total_leaves": stat.total_leaves
+            })
+        
+        return {
+            "room_id": room_id,
+            "summary": {
+                "current_participants": current_count,
+                "total_participants": total_participants,
+                "peak_participants": peak_participants,
+                "total_events": len(events)
+            },
+            "time_series": time_series,
+            "events": [event.to_dict() for event in events[-50:]]  # Last 50 events
+        }
+        
+    except Exception as e:
+        get_logger().error(f"Error getting room analytics for {room_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Analytics failed: {str(e)}")
+
+
+@app.get("/api/rooms/{room_id}/participants/current")
+async def get_current_participants(room_id: str):
+    """Get current participant count for a room."""
+    try:
+        room = await AsyncDatabaseService.get_room(room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Room not found")
+        
+        count = await AsyncDatabaseService.get_current_participant_count(room_id)
+        websocket_count = len(ROOM_PARTICIPANTS.get(room_id, set()))
+        
+        return {
+            "room_id": room_id,
+            "current_participants": count,
+            "websocket_connections": websocket_count,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        get_logger().error(f"Error getting current participants for {room_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @dataclass
 class ConnectionState:
     websocket: WebSocket
@@ -1070,7 +1141,25 @@ async def ws_room_participant(websocket: WebSocket, room_id: str) -> None:
         return
         
     await websocket.accept()
-    get_logger().info(f"Room participant connected to room: {room_id}")
+    
+    # Generate unique participant ID and extract connection info
+    participant_id = str(uuid4())
+    session_id = str(uuid4())
+    client_host = websocket.client.host if websocket.client else "unknown"
+    user_agent = websocket.headers.get("user-agent", "unknown")
+    
+    get_logger().info(f"Participant {participant_id} connected to room: {room_id}")
+
+    # Record participant join event
+    await AsyncDatabaseService.record_participant_event(
+        room_id=room_id,
+        session_id=session_id,
+        event_type="join",
+        participant_id=participant_id,
+        user_agent=user_agent,
+        ip_address=client_host,
+        metadata={"connection_time": datetime.utcnow().isoformat()}
+    )
 
     q: asyncio.Queue[Optional[dict]] = asyncio.Queue()
     room_participants = ROOM_PARTICIPANTS.setdefault(room_id, set())
@@ -1100,6 +1189,18 @@ async def ws_room_participant(websocket: WebSocket, room_id: str) -> None:
             if "type" in msg and msg["type"] == "websocket.disconnect":
                 break
     finally:
+        # Record participant leave event
+        with contextlib.suppress(Exception):
+            await AsyncDatabaseService.record_participant_event(
+                room_id=room_id,
+                session_id=session_id,
+                event_type="leave",
+                participant_id=participant_id,
+                user_agent=user_agent,
+                ip_address=client_host,
+                metadata={"disconnect_time": datetime.utcnow().isoformat()}
+            )
+        
         # Unregister participant
         with contextlib.suppress(KeyError):
             room_participants.discard(q)
@@ -1107,3 +1208,201 @@ async def ws_room_participant(websocket: WebSocket, room_id: str) -> None:
             await q.put(None)
         with contextlib.suppress(Exception):
             await sender
+
+
+# Room Data Export Endpoints
+@app.get("/api/rooms/{room_id}/export")
+async def export_room_data(room_id: str):
+    """Export all room data including transcripts and audio files"""
+    import zipfile
+    import tempfile
+    import json
+    from io import BytesIO
+    
+    try:
+        # Get room info
+        room = await AsyncDatabaseService.get_room(room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Room not found")
+        
+        # Get all associated data
+        db_service = AsyncDatabaseService
+        audio_segments = await db_service.get_room_audio_segments(room_id)
+        subtitle_segments = await db_service.get_room_subtitle_segments(room_id)
+        session_history = await db_service.get_room_session_history(room_id)
+        
+        # Create ZIP file in memory
+        zip_buffer = BytesIO()
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Add room metadata
+            room_metadata = {
+                "room_id": room.room_id,
+                "title": room.title,
+                "description": room.description,
+                "created_at": room.created_at.isoformat(),
+                "updated_at": room.updated_at.isoformat(),
+                "is_live": room.is_live,
+                "duration_ms": room.duration_ms,
+                "total_audio_segments": len(audio_segments),
+                "total_subtitle_segments": len(subtitle_segments),
+                "session_count": len(session_history)
+            }
+            zip_file.writestr("room_metadata.json", json.dumps(room_metadata, indent=2))
+            
+            # Add transcripts as JSON and TXT
+            if subtitle_segments:
+                # JSON format with all metadata
+                subtitles_json = []
+                # TXT format for easy reading
+                transcript_en = []
+                transcript_th = []
+                
+                for segment in subtitle_segments:
+                    subtitles_json.append({
+                        "timestamp_ms": segment.timestamp_ms,
+                        "sequence_number": segment.sequence_number,
+                        "text_en": segment.text_en,
+                        "text_th": segment.text_th,
+                        "confidence_score": segment.confidence_score,
+                        "created_at": segment.created_at.isoformat()
+                    })
+                    
+                    if segment.text_en:
+                        transcript_en.append(f"[{segment.timestamp_ms//1000}s] {segment.text_en}")
+                    if segment.text_th:
+                        transcript_th.append(f"[{segment.timestamp_ms//1000}s] {segment.text_th}")
+                
+                zip_file.writestr("subtitles.json", json.dumps(subtitles_json, indent=2))
+                zip_file.writestr("transcript_english.txt", "\n".join(transcript_en))
+                zip_file.writestr("transcript_thai.txt", "\n".join(transcript_th))
+            
+            # Add audio segments
+            if audio_segments:
+                audio_metadata = []
+                for i, segment in enumerate(audio_segments):
+                    if segment.audio_data:
+                        # Save audio as WAV file
+                        filename = f"audio_segment_{i:04d}_{segment.timestamp_ms}ms.wav"
+                        zip_file.writestr(f"audio/{filename}", segment.audio_data)
+                        
+                        audio_metadata.append({
+                            "filename": filename,
+                            "segment_id": segment.segment_id,
+                            "timestamp_ms": segment.timestamp_ms,
+                            "duration_ms": segment.duration_ms,
+                            "sequence_number": segment.sequence_number,
+                            "audio_language": segment.audio_language,
+                            "sample_rate": segment.sample_rate,
+                            "channels": segment.channels,
+                            "bit_depth": segment.bit_depth,
+                            "created_at": segment.created_at.isoformat()
+                        })
+                
+                zip_file.writestr("audio_metadata.json", json.dumps(audio_metadata, indent=2))
+            
+            # Add session history
+            if session_history:
+                sessions_data = []
+                for session in session_history:
+                    sessions_data.append({
+                        "session_id": session.session_id,
+                        "started_at": session.started_at.isoformat(),
+                        "ended_at": session.ended_at.isoformat() if session.ended_at else None,
+                        "duration_ms": session.duration_ms,
+                        "total_segments": session.total_segments,
+                        "metadata": session.metadata
+                    })
+                
+                zip_file.writestr("session_history.json", json.dumps(sessions_data, indent=2))
+        
+        zip_buffer.seek(0)
+        
+        # Return ZIP file
+        return Response(
+            content=zip_buffer.getvalue(),
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename=room_{room_id}_export.zip"}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error exporting room data for {room_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
+@app.delete("/api/rooms/{room_id}")
+async def delete_room(room_id: str):
+    """Delete a room and all associated data"""
+    try:
+        # Check if room exists
+        room = await AsyncDatabaseService.get_room(room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Room not found")
+        
+        # Check if room is currently live
+        if room.is_live:
+            raise HTTPException(status_code=400, detail="Cannot delete a live room")
+        
+        # Delete all associated data (cascading deletes should handle this)
+        success = await AsyncDatabaseService.delete_room(room_id)
+        
+        if success:
+            return {"message": "Room deleted successfully", "room_id": room_id}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete room")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting room {room_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+
+
+# Add helper methods to DatabaseService
+async def get_room_audio_segments(room_id: str):
+    """Get all audio segments for a room"""
+    async with get_async_session() as session:
+        result = await session.execute(
+            select(AudioSegment).where(AudioSegment.room_id == room_id).order_by(AudioSegment.timestamp_ms)
+        )
+        return result.scalars().all()
+
+
+async def get_room_subtitle_segments(room_id: str):
+    """Get all subtitle segments for a room"""
+    async with get_async_session() as session:
+        result = await session.execute(
+            select(SubtitleSegment).where(SubtitleSegment.room_id == room_id).order_by(SubtitleSegment.timestamp_ms)
+        )
+        return result.scalars().all()
+
+
+async def get_room_session_history(room_id: str):
+    """Get all session history for a room"""
+    async with get_async_session() as session:
+        result = await session.execute(
+            select(SessionHistory).where(SessionHistory.room_id == room_id).order_by(SessionHistory.started_at)
+        )
+        return result.scalars().all()
+
+
+async def delete_room(room_id: str):
+    """Delete a room and all associated data"""
+    async with get_async_session() as session:
+        try:
+            # Delete room (cascading should handle related data)
+            result = await session.execute(
+                delete(SeminarRoom).where(SeminarRoom.room_id == room_id)
+            )
+            await session.commit()
+            return result.rowcount > 0
+        except Exception as e:
+            await session.rollback()
+            raise
+
+
+# Add these methods to AsyncDatabaseService class
+AsyncDatabaseService.get_room_audio_segments = staticmethod(get_room_audio_segments)
+AsyncDatabaseService.get_room_subtitle_segments = staticmethod(get_room_subtitle_segments)
+AsyncDatabaseService.get_room_session_history = staticmethod(get_room_session_history)
+AsyncDatabaseService.delete_room = staticmethod(delete_room)

@@ -240,6 +240,106 @@ class SessionHistory(Base):
         }
 
 
+class ParticipantEvent(Base):
+    """SQLAlchemy model for tracking participant join/leave events."""
+    __tablename__ = "participant_events"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    room_id = Column(String(12), index=True, nullable=False)
+    session_id = Column(String(36), nullable=False)
+    
+    # Event details
+    event_type = Column(String(10), nullable=False)  # join, leave
+    participant_id = Column(String(36), nullable=False)  # unique ID
+    participant_name = Column(String(100), nullable=True)  # display name
+    
+    # Connection details
+    user_agent = Column(String(500), nullable=True)
+    ip_address = Column(String(45), nullable=True)
+    referrer = Column(String(500), nullable=True)
+    
+    # Timing
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Metadata
+    metadata = Column(JSONType, nullable=True)  # Additional event data
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON response."""
+        return {
+            'id': self.id,
+            'room_id': self.room_id,
+            'session_id': self.session_id,
+            'event_type': self.event_type,
+            'participant_id': self.participant_id,
+            'participant_name': self.participant_name,
+            'user_agent': self.user_agent,
+            'ip_address': self.ip_address,
+            'referrer': self.referrer,
+            'timestamp': self.timestamp.isoformat(),
+            'metadata': self.metadata,
+        }
+
+
+class ParticipantStats(Base):
+    """SQLAlchemy model for aggregated participant statistics."""
+    __tablename__ = "participant_stats"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    room_id = Column(String(12), index=True, nullable=False)
+    
+    # Time window for stats (5-minute intervals)
+    time_window = Column(DateTime, nullable=False, index=True)
+    
+    # Participant counts
+    current_participants = Column(Integer, default=0)
+    peak_participants = Column(Integer, default=0)
+    total_joins = Column(Integer, default=0)
+    total_leaves = Column(Integer, default=0)
+    
+    # Engagement metrics
+    avg_session_duration_ms = Column(Integer, nullable=True)
+    bounce_rate_percent = Column(Integer, nullable=True)  # % who left quickly
+    
+    # Geographic data (optional)
+    unique_countries = Column(Integer, nullable=True)
+    unique_cities = Column(Integer, nullable=True)
+    
+    # Technology stats
+    device_stats = Column(JSONType, nullable=True)  # mobile, desktop breakdown
+    browser_stats = Column(JSONType, nullable=True)  # browser usage
+    
+    # Quality metrics
+    connection_issues = Column(Integer, default=0)
+    avg_latency_ms = Column(Integer, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON response."""
+        return {
+            'id': self.id,
+            'room_id': self.room_id,
+            'time_window': self.time_window.isoformat(),
+            'current_participants': self.current_participants,
+            'peak_participants': self.peak_participants,
+            'total_joins': self.total_joins,
+            'total_leaves': self.total_leaves,
+            'avg_session_duration_ms': self.avg_session_duration_ms,
+            'bounce_rate_percent': self.bounce_rate_percent,
+            'unique_countries': self.unique_countries,
+            'unique_cities': self.unique_cities,
+            'device_stats': self.device_stats,
+            'browser_stats': self.browser_stats,
+            'connection_issues': self.connection_issues,
+            'avg_latency_ms': self.avg_latency_ms,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+        }
+
+
 # Database utility functions
 def get_db() -> Session:
     """Get database session dependency."""
