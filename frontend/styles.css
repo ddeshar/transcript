@@ -325,3 +325,246 @@ button.primary {
     min-height: 240px;
   }
 }
+
+/* === ROOM MANAGEMENT STYLES === */
+
+.room-management {
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.room-management h2 {
+  margin: 0 0 20px 0;
+  color: var(--text);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.primary-button {
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.primary-button:hover {
+  background: #10b981;
+  transform: translateY(-1px);
+}
+
+/* Room Creation Form */
+.room-creation {
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 2px solid var(--accent-muted);
+}
+
+.creation-form h3 {
+  margin: 0 0 15px 0;
+  color: var(--text);
+  font-size: 1.2rem;
+}
+
+.creation-form input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 1rem;
+  margin-bottom: 15px;
+  box-sizing: border-box;
+}
+
+.creation-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.creation-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.creation-buttons button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.creation-buttons .primary {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.creation-buttons .primary:hover {
+  background: #10b981;
+}
+
+.creation-buttons button:not(.primary) {
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.creation-buttons button:not(.primary):hover {
+  color: var(--text);
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+/* Room List */
+.room-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.room-card {
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.room-card:hover {
+  border-color: var(--accent-muted);
+  transform: translateY(-2px);
+}
+
+.room-header {
+  display: flex;
+  justify-content: between;
+  align-items: flex-start;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.room-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+  flex: 1;
+}
+
+.room-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.status-live {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.status-offline {
+  background: rgba(148, 163, 184, 0.2);
+  color: var(--muted);
+}
+
+.room-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-bottom: 15px;
+}
+
+.room-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.room-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: center;
+  transition: all 0.2s ease;
+  display: inline-block;
+}
+
+.btn-present {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.btn-present:hover {
+  background: #10b981;
+}
+
+.btn-join {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.btn-join:hover {
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.btn-copy {
+  background: rgba(52, 211, 153, 0.1);
+  color: var(--accent);
+  border: 1px solid var(--accent-muted);
+}
+
+.btn-copy:hover {
+  background: var(--accent-muted);
+}
+
+.loading, .no-rooms {
+  text-align: center;
+  color: var(--muted);
+  padding: 40px 20px;
+  font-style: italic;
+}
+
+/* Responsive adjustments for room cards */
+@media (max-width: 768px) {
+  .room-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .room-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+  
+  .room-actions {
+    width: 100%;
+  }
+  
+  .room-btn {
+    flex: 1;
+    min-width: 120px;
+  }
+}

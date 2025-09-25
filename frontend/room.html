@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Seminar</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    .room-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .room-header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding: 20px;
+      background: var(--bg-secondary);
+      border-radius: 12px;
+    }
+
+    .room-title {
+      font-size: 2rem;
+      font-weight: bold;
+      color: var(--text-primary);
+      margin-bottom: 10px;
+    }
+
+    .room-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: 1.1rem;
+    }
+
+    .live-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: #ef4444;
+      color: white;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 0.9rem;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: white;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .offline-indicator {
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    /* Audio Controls */
+    .audio-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      margin: 20px 0;
+      padding: 20px;
+      background: var(--bg-secondary);
+      border-radius: 12px;
+    }
+
+    .language-switch {
+      display: flex;
+      background: var(--bg-primary);
+      border-radius: 8px;
+      padding: 4px;
+      border: 2px solid var(--border-color);
+    }
+
+    .language-btn {
+      padding: 8px 16px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      font-weight: 500;
+    }
+
+    .language-btn.active {
+      background: var(--accent-color);
+      color: white;
+    }
+
+    .subtitle-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 50px;
+      height: 24px;
+      background: var(--bg-muted);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .toggle-switch.active {
+      background: var(--accent-color);
+    }
+
+    .toggle-knob {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s ease;
+    }
+
+    .toggle-switch.active .toggle-knob {
+      transform: translateX(26px);
+    }
+
+    /* Timeline Controls */
+    .timeline-controls {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--bg-secondary);
+      border-top: 2px solid var(--border-color);
+      padding: 15px 20px;
+      z-index: 1000;
+    }
+
+    .timeline {
+      width: 100%;
+      height: 6px;
+      background: var(--bg-muted);
+      border-radius: 3px;
+      margin-bottom: 15px;
+      position: relative;
+      cursor: pointer;
+    }
+
+    .timeline-progress {
+      height: 100%;
+      background: var(--accent-color);
+      border-radius: 3px;
+      transition: width 0.1s ease;
+    }
+
+    .timeline-buffered {
+      height: 100%;
+      background: var(--text-muted);
+      opacity: 0.3;
+      border-radius: 3px;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .playback-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+    }
+
+    .control-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 50%;
+      background: var(--accent-color);
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 16px;
+    }
+
+    .control-btn:hover {
+      background: var(--accent-hover);
+      transform: scale(1.05);
+    }
+
+    .control-btn:disabled {
+      background: var(--bg-muted);
+      color: var(--text-muted);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .live-btn {
+      background: #ef4444;
+      padding: 8px 16px;
+      border-radius: 20px;
+      width: auto;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .live-btn.active {
+      background: #22c55e;
+    }
+
+    .live-btn.dimmed {
+      background: var(--bg-muted);
+      color: var(--text-muted);
+    }
+
+    .time-display {
+      font-size: 14px;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+
+    /* Subtitle Display */
+    .subtitle-container {
+      position: fixed;
+      bottom: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: 90%;
+      text-align: center;
+      z-index: 999;
+    }
+
+    .subtitle-text {
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 1.2rem;
+      line-height: 1.4;
+      margin-bottom: 8px;
+      backdrop-filter: blur(4px);
+    }
+
+    .subtitle-english {
+      font-size: 1rem;
+      color: #e5e5e5;
+    }
+
+    .subtitle-thai {
+      font-weight: 600;
+    }
+
+    /* Content Area */
+    .content-area {
+      margin-bottom: 100px;
+      padding: 20px;
+    }
+
+    .transcript-history {
+      max-height: 400px;
+      overflow-y: auto;
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .transcript-item {
+      margin-bottom: 15px;
+      padding: 12px;
+      background: var(--bg-primary);
+      border-radius: 8px;
+      border-left: 4px solid var(--accent-color);
+    }
+
+    .transcript-time {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 5px;
+    }
+
+    .transcript-thai {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .transcript-english {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .room-container {
+        padding: 10px;
+      }
+      
+      .audio-controls {
+        flex-direction: column;
+        gap: 15px;
+      }
+      
+      .playback-controls {
+        flex-wrap: wrap;
+      }
+      
+      .timeline-controls {
+        padding: 10px 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="room-container">
+    <div class="room-header">
+      <div class="room-title" id="roomTitle">Loading...</div>
+      <div class="room-status" id="roomStatus">
+        <div class="offline-indicator">Waiting for seminar to begin...</div>
+      </div>
+    </div>
+
+    <div class="audio-controls">
+      <div class="subtitle-toggle">
+        <label>English Subtitles</label>
+        <div class="toggle-switch" id="englishToggle">
+          <div class="toggle-knob"></div>
+        </div>
+      </div>
+      
+      <div class="subtitle-toggle">
+        <label>Thai Subtitles</label>
+        <div class="toggle-switch active" id="thaiToggle">
+          <div class="toggle-knob"></div>
+        </div>
+      </div>
+
+      <div class="language-switch">
+        <button class="language-btn active" id="englishAudioBtn">English Audio</button>
+        <button class="language-btn" id="thaiAudioBtn">Thai Audio</button>
+      </div>
+    </div>
+
+    <div class="content-area">
+      <div class="transcript-history" id="transcriptHistory">
+        <p style="text-align: center; color: var(--text-muted);">
+          Transcript will appear here when the seminar begins...
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Subtitle Overlay -->
+  <div class="subtitle-container" id="subtitleContainer" style="display: none;">
+    <div class="subtitle-text subtitle-thai" id="thaiSubtitle"></div>
+    <div class="subtitle-text subtitle-english" id="englishSubtitle" style="display: none;"></div>
+  </div>
+
+  <!-- Timeline Controls -->
+  <div class="timeline-controls" id="timelineControls" style="display: none;">
+    <div class="timeline" id="timeline">
+      <div class="timeline-buffered" id="timelineBuffered"></div>
+      <div class="timeline-progress" id="timelineProgress"></div>
+    </div>
+    
+    <div class="playback-controls">
+      <button class="control-btn" id="rewindBtn" title="Rewind 10s">⏪</button>
+      <button class="control-btn" id="playPauseBtn" title="Play/Pause">▶️</button>
+      <button class="control-btn" id="forwardBtn" title="Forward 10s">⏩</button>
+      
+      <div class="time-display" id="timeDisplay">00:00 / 00:00</div>
+      
+      <button class="control-btn live-btn active" id="liveBtn">LIVE</button>
+    </div>
+  </div>
+
+  <script>
+    // Extract room ID from URL
+    const roomId = window.location.pathname.split('/').pop();
+    
+    // UI Elements
+    const elements = {
+      roomTitle: document.getElementById('roomTitle'),
+      roomStatus: document.getElementById('roomStatus'),
+      englishToggle: document.getElementById('englishToggle'),
+      thaiToggle: document.getElementById('thaiToggle'),
+      englishAudioBtn: document.getElementById('englishAudioBtn'),
+      thaiAudioBtn: document.getElementById('thaiAudioBtn'),
+      transcriptHistory: document.getElementById('transcriptHistory'),
+      subtitleContainer: document.getElementById('subtitleContainer'),
+      thaiSubtitle: document.getElementById('thaiSubtitle'),
+      englishSubtitle: document.getElementById('englishSubtitle'),
+      timelineControls: document.getElementById('timelineControls'),
+      timeline: document.getElementById('timeline'),
+      timelineProgress: document.getElementById('timelineProgress'),
+      timelineBuffered: document.getElementById('timelineBuffered'),
+      playPauseBtn: document.getElementById('playPauseBtn'),
+      rewindBtn: document.getElementById('rewindBtn'),
+      forwardBtn: document.getElementById('forwardBtn'),
+      liveBtn: document.getElementById('liveBtn'),
+      timeDisplay: document.getElementById('timeDisplay')
+    };
+
+    // State
+    let websocket = null;
+    let roomData = null;
+    let isLive = false;
+    let showEnglishSubtitles = false;
+    let showThaiSubtitles = true;
+    let currentAudioLanguage = 'english';
+    let transcriptSegments = [];
+    let currentTime = 0;
+    let duration = 0;
+    let isPlaying = false;
+    let isAtLive = true;
+
+    // Initialize
+    async function init() {
+      try {
+        // Fetch room data
+        const response = await fetch(`/api/rooms/${roomId}`);
+        if (!response.ok) {
+          throw new Error('Room not found');
+        }
+        
+        roomData = await response.json();
+        elements.roomTitle.textContent = roomData.title;
+        
+        if (roomData.is_live) {
+          startLiveSession();
+        }
+        
+        setupEventListeners();
+        connectWebSocket();
+      } catch (error) {
+        console.error('Failed to load room:', error);
+        elements.roomTitle.textContent = 'Room Not Found';
+        elements.roomStatus.innerHTML = '<div class="offline-indicator">This seminar room does not exist.</div>';
+      }
+    }
+
+    function startLiveSession() {
+      isLive = true;
+      elements.roomStatus.innerHTML = `
+        <div class="live-indicator">
+          <div class="live-dot"></div>
+          LIVE
+        </div>
+      `;
+      elements.timelineControls.style.display = 'block';
+      elements.subtitleContainer.style.display = 'block';
+    }
+
+    function setupEventListeners() {
+      // Subtitle toggles
+      elements.englishToggle.addEventListener('click', () => {
+        showEnglishSubtitles = !showEnglishSubtitles;
+        elements.englishToggle.classList.toggle('active', showEnglishSubtitles);
+        elements.englishSubtitle.style.display = showEnglishSubtitles ? 'block' : 'none';
+      });
+
+      elements.thaiToggle.addEventListener('click', () => {
+        showThaiSubtitles = !showThaiSubtitles;
+        elements.thaiToggle.classList.toggle('active', showThaiSubtitles);
+        elements.thaiSubtitle.style.display = showThaiSubtitles ? 'block' : 'none';
+      });
+
+      // Audio language switch
+      elements.englishAudioBtn.addEventListener('click', () => {
+        currentAudioLanguage = 'english';
+        elements.englishAudioBtn.classList.add('active');
+        elements.thaiAudioBtn.classList.remove('active');
+        // TODO: Switch audio track
+      });
+
+      elements.thaiAudioBtn.addEventListener('click', () => {
+        currentAudioLanguage = 'thai';
+        elements.thaiAudioBtn.classList.add('active');
+        elements.englishAudioBtn.classList.remove('active');
+        // TODO: Switch audio track
+      });
+
+      // Playback controls
+      elements.playPauseBtn.addEventListener('click', () => {
+        if (isAtLive) return; // Can't pause live stream
+        isPlaying = !isPlaying;
+        elements.playPauseBtn.textContent = isPlaying ? '⏸️' : '▶️';
+        // TODO: Implement audio playback control
+      });
+
+      elements.rewindBtn.addEventListener('click', () => {
+        seekRelative(-10);
+      });
+
+      elements.forwardBtn.addEventListener('click', () => {
+        seekRelative(10);
+      });
+
+      elements.liveBtn.addEventListener('click', () => {
+        goToLive();
+      });
+
+      // Timeline seeking
+      elements.timeline.addEventListener('click', (e) => {
+        const rect = elements.timeline.getBoundingClientRect();
+        const percentage = (e.clientX - rect.left) / rect.width;
+        seekToPercentage(percentage);
+      });
+    }
+
+    function connectWebSocket() {
+      if (websocket) {
+        websocket.close();
+      }
+
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsUrl = `${protocol}://${window.location.host}/ws/room/${roomId}`;
+      websocket = new WebSocket(wsUrl);
+
+      websocket.onopen = () => {
+        console.log('Connected to room:', roomId);
+      };
+
+      websocket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleWebSocketMessage(data);
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+
+      websocket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      websocket.onclose = () => {
+        console.log('WebSocket closed, attempting to reconnect...');
+        setTimeout(connectWebSocket, 2000);
+      };
+    }
+
+    function handleWebSocketMessage(data) {
+      switch (data.type) {
+        case 'partial':
+        case 'final':
+          updateSubtitles(data);
+          if (data.type === 'final') {
+            addToTranscript(data);
+          }
+          break;
+        case 'status':
+          // Handle status updates
+          break;
+        case 'room_status':
+          updateRoomStatus(data.is_live, data.participant_count);
+          break;
+        case 'transcript':
+          // Load existing transcript when joining room
+          loadExistingTranscript(data.transcript);
+          break;
+      }
+    }
+
+    function updateSubtitles(data) {
+      if (showThaiSubtitles && data.thai) {
+        elements.thaiSubtitle.textContent = data.thai;
+      }
+      
+      if (showEnglishSubtitles && data.english) {
+        elements.englishSubtitle.textContent = data.english;
+      }
+
+      // Auto-hide subtitles after 5 seconds for partial results
+      if (data.type === 'partial') {
+        setTimeout(() => {
+          if (elements.thaiSubtitle.textContent === data.thai) {
+            elements.thaiSubtitle.textContent = '';
+          }
+          if (elements.englishSubtitle.textContent === data.english) {
+            elements.englishSubtitle.textContent = '';
+          }
+        }, 5000);
+      }
+    }
+
+    function addToTranscript(data) {
+      const transcriptItem = document.createElement('div');
+      transcriptItem.className = 'transcript-item';
+      
+      const timeStamp = new Date(data.timestamp_ms || Date.now());
+      const timeString = timeStamp.toLocaleTimeString();
+      
+      transcriptItem.innerHTML = `
+        <div class="transcript-time">${timeString}</div>
+        <div class="transcript-thai">${data.thai || ''}</div>
+        <div class="transcript-english">${data.english || ''}</div>
+      `;
+      
+      elements.transcriptHistory.appendChild(transcriptItem);
+      elements.transcriptHistory.scrollTop = elements.transcriptHistory.scrollHeight;
+      
+      // Update timeline if this is the first transcript item
+      if (elements.transcriptHistory.children.length === 1) {
+        elements.transcriptHistory.innerHTML = '';
+        elements.transcriptHistory.appendChild(transcriptItem);
+      }
+    }
+
+    function seekRelative(seconds) {
+      if (isAtLive) {
+        isAtLive = false;
+        elements.liveBtn.classList.remove('active');
+        elements.liveBtn.classList.add('dimmed');
+      }
+      
+      currentTime = Math.max(0, Math.min(duration, currentTime + seconds));
+      updateTimeDisplay();
+      // TODO: Seek audio to currentTime
+    }
+
+    function seekToPercentage(percentage) {
+      if (isAtLive) {
+        isAtLive = false;
+        elements.liveBtn.classList.remove('active');
+        elements.liveBtn.classList.add('dimmed');
+      }
+      
+      currentTime = duration * percentage;
+      updateTimeDisplay();
+      // TODO: Seek audio to currentTime
+    }
+
+    function goToLive() {
+      if (!isLive) return;
+      
+      isAtLive = true;
+      currentTime = duration;
+      elements.liveBtn.classList.add('active');
+      elements.liveBtn.classList.remove('dimmed');
+      updateTimeDisplay();
+      // TODO: Seek audio to live position
+    }
+
+    function updateTimeDisplay() {
+      const currentTimeStr = formatTime(currentTime);
+      const durationStr = formatTime(duration);
+      elements.timeDisplay.textContent = `${currentTimeStr} / ${durationStr}`;
+      
+      const percentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+      elements.timelineProgress.style.width = `${percentage}%`;
+    }
+
+    function formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function endLiveSession() {
+      isLive = false;
+      elements.liveStatus.textContent = 'Offline';
+      elements.liveStatus.className = 'live-status offline';
+    }
+    
+    function updateRoomStatus(live, participantCount) {
+      isLive = live;
+      if (live) {
+        startLiveSession();
+      } else {
+        endLiveSession();
+      }
+      
+      // Update participant count if element exists
+      const participantCountEl = document.querySelector('.participant-count');
+      if (participantCountEl) {
+        participantCountEl.textContent = `${participantCount} participant${participantCount !== 1 ? 's' : ''}`;
+      }
+    }
+    
+    function loadExistingTranscript(transcript) {
+      // Clear current transcript
+      elements.transcriptContainer.innerHTML = '';
+      
+      // Load segments if available
+      if (transcript && transcript.segments) {
+        transcript.segments.forEach(segment => {
+          addToTranscript(segment);
+        });
+      }
+    }    // Start the application
+    init();
+  </script>
+</body>
+</html>

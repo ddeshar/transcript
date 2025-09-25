@@ -12,10 +12,11 @@
 <body>
   <header class="app-header">
     <div>
-      <h1>Realtime English → Thai Subtitles</h1>
-      <p class="subtitle">Speak in English, read subtitles in Thai instantly.</p>
+      <h1>Live Seminar Platform</h1>
+      <p class="subtitle">Create live seminars with real-time English-Thai subtitles.</p>
     </div>
     <div class="header-controls">
+      <button id="createRoomBtn" class="primary-button">+ Create New Room</button>
       <a href="/static/provider-config.html" class="settings-link">🎯 Providers</a>
       <a href="/settings" class="settings-link">⚙️ Settings</a>
       <span id="statusChip" class="status status-idle">Idle</span>
@@ -23,24 +24,48 @@
   </header>
 
   <main class="app-main">
-    <section class="controls">
-      <div class="control-row">
-        <button id="startBtn" class="primary">Start</button>
-        <button id="stopBtn" disabled>Stop</button>
-        <button id="clearBtn">Clear</button>
-        <button id="saveBtn" disabled>Save (.txt)</button>
-        <a id="tpLink" class="button" target="_blank" rel="noopener" style="display:none">Open Teleprompter</a>
+    <!-- Room Management Section -->
+    <section class="room-management" id="roomManagement">
+      <h2>Seminar Rooms</h2>
+      
+      <div class="room-creation" id="roomCreation" style="display: none;">
+        <div class="creation-form">
+          <h3>Create New Seminar Room</h3>
+          <input type="text" id="roomTitleInput" placeholder="Enter seminar title..." maxlength="100">
+          <div class="creation-buttons">
+            <button id="confirmCreateBtn" class="primary">Create Room</button>
+            <button id="cancelCreateBtn">Cancel</button>
+          </div>
+        </div>
       </div>
-      <div class="control-row secondary">
-        <label class="toggle">
-          <input type="checkbox" id="englishToggle" checked />
-          <span>Show English preview</span>
-        </label>
-        <div class="font-size">
-          <span>Caption size:</span>
-          <button data-size="s" class="size-btn">S</button>
-          <button data-size="m" class="size-btn active">M</button>
-          <button data-size="l" class="size-btn">L</button>
+
+      <div class="room-list" id="roomList">
+        <div class="loading">Loading rooms...</div>
+      </div>
+    </section>
+
+    <!-- Original Transcription Interface (now hidden by default) -->
+    <section class="transcription-section" id="transcriptionSection" style="display: none;">
+      <h2>Direct Transcription (Legacy Mode)</h2>
+        <div class="controls">
+        <div class="control-row">
+          <button id="startBtn" class="primary">Start</button>
+          <button id="stopBtn" disabled>Stop</button>
+          <button id="clearBtn">Clear</button>
+          <button id="saveBtn" disabled>Save (.txt)</button>
+          <a id="tpLink" class="button" target="_blank" rel="noopener" style="display:none">Open Teleprompter</a>
+        </div>
+        <div class="control-row secondary">
+          <label class="toggle">
+            <input type="checkbox" id="englishToggle" checked />
+            <span>Show English preview</span>
+          </label>
+          <div class="font-size">
+            <span>Caption size:</span>
+            <button data-size="s" class="size-btn">S</button>
+            <button data-size="m" class="size-btn active">M</button>
+            <button data-size="l" class="size-btn">L</button>
+          </div>
         </div>
       </div>
     </section>
@@ -54,6 +79,7 @@
     <section class="log" id="log"></section>
   </main>
 
+  <script src="/static/room-manager.js"></script>
   <script src="/static/app.js" type="module"></script>
 </body>
 </html>

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Test Transcription - Debug Audio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@100..900&family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>🎤 Test Transcription</h1>
+      <p class="subtitle">Debug audio pipeline and transcription functionality.</p>
+    </div>
+    <div class="header-controls">
+      <a href="/" class="settings-link">← Back to Rooms</a>
+      <span id="statusChip" class="status status-idle">Idle</span>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <!-- Controls -->
+    <div class="control-panel">
+      <button id="recordButton" class="primary-button">🎤 Start Recording</button>
+      <button id="stopButton" class="secondary-button" disabled>🛑 Stop</button>
+      <button id="clearButton" class="secondary-button">🗑️ Clear</button>
+    </div>
+
+    <!-- Live Subtitles -->
+    <div class="subtitle-container">
+      <div class="subtitle thai-subtitle" id="thaiSubtitle">Thai subtitles will appear here...</div>
+      <div class="subtitle english-subtitle" id="englishSubtitle">English subtitles will appear here...</div>
+    </div>
+
+    <!-- Debug Information -->
+    <div class="debug-info">
+      <h3>Debug Information</h3>
+      <div>WebSocket Status: <span id="wsStatus">Disconnected</span></div>
+      <div>Audio Context: <span id="audioStatus">Not initialized</span></div>
+      <div>Microphone: <span id="micStatus">Not connected</span></div>
+      <div>Session ID: <span id="sessionId">-</span></div>
+      <div>Messages Received: <span id="messageCount">0</span></div>
+    </div>
+
+    <!-- Transcript -->
+    <section class="transcript-section">
+      <h2>Transcript</h2>
+      <div class="transcript-controls">
+        <button id="exportButton" class="secondary-button">📄 Export</button>
+      </div>
+      <div id="transcriptContainer" class="transcript-container">
+        <!-- Transcript entries will appear here -->
+      </div>
+    </section>
+  </main>
+
+  <style>
+    .debug-info {
+      background: var(--surface-color);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 1rem;
+      margin: 1rem 0;
+      font-family: monospace;
+    }
+    
+    .debug-info h3 {
+      margin-top: 0;
+      color: var(--primary-color);
+    }
+    
+    .debug-info > div {
+      margin: 0.5rem 0;
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    .debug-info span {
+      font-weight: bold;
+      color: var(--accent-color);
+    }
+    
+    .control-panel {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+  </style>
+
+  <script src="/static/app.js" type="module"></script>
+  
+  <script>
+    // Override the app.js behavior for debugging
+    document.addEventListener('DOMContentLoaded', function() {
+      const elements = {
+        recordButton: document.getElementById('recordButton'),
+        stopButton: document.getElementById('stopButton'),
+        clearButton: document.getElementById('clearButton'),
+        thaiSubtitle: document.getElementById('thaiSubtitle'),
+        englishSubtitle: document.getElementById('englishSubtitle'),
+        statusChip: document.getElementById('statusChip'),
+        transcriptContainer: document.getElementById('transcriptContainer'),
+        exportButton: document.getElementById('exportButton'),
+        wsStatus: document.getElementById('wsStatus'),
+        audioStatus: document.getElementById('audioStatus'),
+        micStatus: document.getElementById('micStatus'),
+        sessionId: document.getElementById('sessionId'),
+        messageCount: document.getElementById('messageCount')
+      };
+      
+      let messageCounter = 0;
+      let websocket = null;
+      let mediaStream = null;
+      let audioContext = null;
+      let processor = null;
+      let isRecording = false;
+      
+      // Debug function to update status displays
+      function updateDebugStatus(type, status) {
+        if (elements[type]) {
+          elements[type].textContent = status;
+          elements[type].style.color = status.includes('Connected') || status.includes('Active') ? 'green' : 
+                                      status.includes('Error') || status.includes('Failed') ? 'red' : 
+                                      'orange';
+        }
+      }
+      
+      // Override WebSocket message handler to show debug info
+      const originalWebSocketHandler = window.handleWebSocketMessage;
+      window.handleWebSocketMessage = function(data) {
+        messageCounter++;
+        elements.messageCount.textContent = messageCounter;
+        
+        console.log('WebSocket message received:', data);
+        
+        // Update debug display
+        if (data.type === 'status') {
+          updateDebugStatus('wsStatus', `Connected (${data.status})`);
+        }
+        
+        // Call original handler
+        if (originalWebSocketHandler) {
+          originalWebSocketHandler(data);
+        }
+      };
+      
+      // Enhanced start recording function with debug info
+      elements.recordButton.addEventListener('click', async () => {
+        try {
+          elements.recordButton.disabled = true;
+          updateDebugStatus('micStatus', 'Requesting permission...');
+          
+          mediaStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+              sampleRate: 16000,
+              channelCount: 1,
+              echoCancellation: true,
+              noiseSuppression: true
+            }
+          });
+          
+          updateDebugStatus('micStatus', 'Connected');
+          updateDebugStatus('audioStatus', 'Initializing...');
+          
+          // Start the original app's recording functionality
+          if (window.startRecording) {
+            await window.startRecording();
+            updateDebugStatus('audioStatus', 'Active');
+            elements.recordButton.disabled = true;
+            elements.stopButton.disabled = false;
+            isRecording = true;
+          }
+          
+        } catch (error) {
+          console.error('Error starting recording:', error);
+          updateDebugStatus('micStatus', 'Error: ' + error.message);
+          elements.recordButton.disabled = false;
+        }
+      });
+      
+      elements.stopButton.addEventListener('click', () => {
+        if (window.stopRecording) {
+          window.stopRecording();
+        }
+        updateDebugStatus('audioStatus', 'Stopped');
+        updateDebugStatus('micStatus', 'Disconnected');
+        elements.recordButton.disabled = false;
+        elements.stopButton.disabled = true;
+        isRecording = false;
+      });
+      
+      elements.clearButton.addEventListener('click', () => {
+        if (window.clearTranscript) {
+          window.clearTranscript();
+        }
+        elements.transcriptContainer.innerHTML = '';
+        messageCounter = 0;
+        elements.messageCount.textContent = '0';
+      });
+      
+      // Show session ID when available
+      if (window.sessionId) {
+        elements.sessionId.textContent = window.sessionId;
+      }
+    });
+  </script>
+</body>
+</html>

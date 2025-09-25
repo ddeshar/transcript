@@ -9,18 +9,20 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import Field
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
+from .models import SEMINAR_ROOMS, ROOM_PARTICIPANTS, SeminarRoom
 from .providers import create_asr_provider, create_mt_provider
 from .providers.asr_base import ASRStream
 from .providers.mt_base import MTProvider
 from .utils import (
     SessionTranscript,
+    get_logger,
     jsonify_log,
     session_id,
     utc_timestamp_ms,
@@ -33,6 +35,9 @@ FRONTEND_DIR = BASE_DIR / "frontend"
 # Followers hub maps each transcription session ID to follower queues that
 # should receive real-time messages (e.g., teleprompter clients).
 SESSION_FOLLOWERS: Dict[str, set] = {}
+
+# Active sessions to support session following and room management
+ACTIVE_SESSIONS: Dict[str, ConnectionState] = {}
 
 
 class Settings(BaseSettings):
@@ -528,6 +533,162 @@ async def teleprompter() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "teleprompter.html")
 
 
+# === SEMINAR ROOM API ENDPOINTS ===
+
+class CreateRoomRequest(BaseModel):
+    title: str
+
+
+class RoomResponse(BaseModel):
+    room_id: str
+    title: str
+    is_live: bool
+    participant_url: str
+    presenter_url: str
+    created_at: str
+    started_at: str | None = None
+    ended_at: str | None = None
+    participant_count: int = 0
+    duration_ms: int | None = None
+
+
+@app.post("/api/rooms", response_model=RoomResponse)
+async def create_room(request: CreateRoomRequest) -> RoomResponse:
+    """Create a new seminar room."""
+    room = SeminarRoom.create(request.title)
+    SEMINAR_ROOMS[room.room_id] = room
+    
+    base_url = "http://localhost:8000"  # In production, get from request
+    return RoomResponse(
+        room_id=room.room_id,
+        title=room.title,
+        is_live=room.is_live,
+        participant_url=room.get_room_url(base_url),
+        presenter_url=room.get_presenter_url(base_url),
+        created_at=room.created_at.isoformat(),
+        started_at=room.started_at.isoformat() if room.started_at else None,
+        ended_at=room.ended_at.isoformat() if room.ended_at else None,
+        participant_count=len(ROOM_PARTICIPANTS.get(room.room_id, set())),
+        duration_ms=room._get_duration_ms()
+    )
+
+
+@app.get("/api/rooms", response_model=list[RoomResponse])
+async def list_rooms() -> list[RoomResponse]:
+    """List all seminar rooms."""
+    base_url = "http://localhost:8000"  # In production, get from request
+    rooms = []
+    
+    for room in SEMINAR_ROOMS.values():
+        rooms.append(RoomResponse(
+            room_id=room.room_id,
+            title=room.title,
+            is_live=room.is_live,
+            participant_url=room.get_room_url(base_url),
+            presenter_url=room.get_presenter_url(base_url),
+            created_at=room.created_at.isoformat(),
+            started_at=room.started_at.isoformat() if room.started_at else None,
+            ended_at=room.ended_at.isoformat() if room.ended_at else None,
+            participant_count=len(ROOM_PARTICIPANTS.get(room.room_id, set())),
+            duration_ms=room._get_duration_ms()
+        ))
+    
+    return sorted(rooms, key=lambda r: r.created_at, reverse=True)
+
+
+@app.get("/api/rooms/{room_id}", response_model=RoomResponse)
+async def get_room(room_id: str) -> RoomResponse:
+    """Get details of a specific room."""
+    if room_id not in SEMINAR_ROOMS:
+        raise HTTPException(status_code=404, detail="Room not found")
+    
+    room = SEMINAR_ROOMS[room_id]
+    base_url = "http://localhost:8000"  # In production, get from request
+    
+    return RoomResponse(
+        room_id=room.room_id,
+        title=room.title,
+        is_live=room.is_live,
+        participant_url=room.get_room_url(base_url),
+        presenter_url=room.get_presenter_url(base_url),
+        created_at=room.created_at.isoformat(),
+        started_at=room.started_at.isoformat() if room.started_at else None,
+        ended_at=room.ended_at.isoformat() if room.ended_at else None,
+        participant_count=len(ROOM_PARTICIPANTS.get(room.room_id, set())),
+        duration_ms=room._get_duration_ms()
+    )
+
+
+@app.get("/room/{room_id}")
+async def room_page(room_id: str) -> FileResponse:
+    """Serve the participant interface for a room."""
+    if room_id not in SEMINAR_ROOMS:
+        raise HTTPException(status_code=404, detail="Room not found")
+    return FileResponse(FRONTEND_DIR / "room.html")
+
+
+@app.get("/present/{room_id}")
+async def presenter_page(room_id: str) -> FileResponse:
+    """Serve the presenter interface for a room."""
+    if room_id not in SEMINAR_ROOMS:
+        raise HTTPException(status_code=404, detail="Room not found")
+    return FileResponse(FRONTEND_DIR / "presenter.html")
+
+
+@app.get("/test-transcribe")
+async def test_transcribe_page() -> FileResponse:
+    """Serve the test transcription interface for debugging."""
+    return FileResponse(FRONTEND_DIR / "test-transcribe.html")
+
+
+class RoomStatusUpdate(BaseModel):
+    is_live: bool
+    presenter_session_id: str | None = None
+
+
+@app.put("/api/rooms/{room_id}/status")
+async def update_room_status(room_id: str, update: RoomStatusUpdate) -> dict:
+    """Update room live status."""
+    if room_id not in SEMINAR_ROOMS:
+        raise HTTPException(status_code=404, detail="Room not found")
+    
+    room = SEMINAR_ROOMS[room_id]
+    
+    if update.is_live and not room.is_live:
+        # Starting live session
+        room.start_live(update.presenter_session_id or "")
+        
+        # Notify all room participants that the session has started
+        participants = ROOM_PARTICIPANTS.get(room_id, set())
+        message = {
+            "type": "room_status", 
+            "is_live": True,
+            "room_id": room_id,
+            "participant_count": len(participants)
+        }
+        for participant_queue in participants:
+            with contextlib.suppress(Exception):
+                await participant_queue.put(message)
+                
+    elif not update.is_live and room.is_live:
+        # Ending live session
+        room.end_live()
+        
+        # Notify all room participants that the session has ended
+        participants = ROOM_PARTICIPANTS.get(room_id, set())
+        message = {
+            "type": "room_status", 
+            "is_live": False,
+            "room_id": room_id,
+            "participant_count": len(participants)
+        }
+        for participant_queue in participants:
+            with contextlib.suppress(Exception):
+                await participant_queue.put(message)
+    
+    return {"success": True, "is_live": room.is_live}
+
+
 @dataclass
 class ConnectionState:
     websocket: WebSocket
@@ -598,6 +759,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         sample_rate=settings.audio_sample_rate,
         transcript=SessionTranscript(),
     )
+    
+    # Register session for room management and following
+    ACTIVE_SESSIONS[sess_id] = state
+    
     outgoing: asyncio.Queue[Optional[dict]] = asyncio.Queue()
 
     async def send(payload: dict) -> None:
@@ -666,6 +831,16 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     for q in list(followers):
                         with contextlib.suppress(Exception):
                             await q.put(message)
+                
+                # Broadcast to room participants if this session is a presenter
+                for room_id, room in SEMINAR_ROOMS.items():
+                    if room.presenter_session_id == sess_id:
+                        participants = ROOM_PARTICIPANTS.get(room_id, set())
+                        for participant_q in participants:
+                            with contextlib.suppress(Exception):
+                                await participant_q.put(message)
+                        break
+                
                 if result.is_final:
                     state.transcript.add_segment(message)
                     auto_save_transcript(state)
@@ -691,6 +866,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 kind = data.get("type")
                 if kind == "config":
                     sr = data.get("sampleRate")
+                    room_id = data.get("roomId")
+                    
+                    # Link session to room if roomId provided
+                    if room_id and room_id in SEMINAR_ROOMS:
+                        room = SEMINAR_ROOMS[room_id]
+                        if not room.presenter_session_id:
+                            room.presenter_session_id = sess_id
+                            get_logger().info(f"Linked session {sess_id} to room {room_id}")
+                    
                     if isinstance(sr, int) and sr > 0:
                         state.sample_rate = sr
                         vad = VoiceActivityDetector(
@@ -752,6 +936,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 with contextlib.suppress(Exception):
                     await q.put(None)
             SESSION_FOLLOWERS.pop(sess_id, None)
+        # Remove from active sessions
+        ACTIVE_SESSIONS.pop(sess_id, None)
         with contextlib.suppress(Exception):
             await sender_task
 
@@ -788,6 +974,54 @@ async def ws_follow(websocket: WebSocket, sess_id: str) -> None:
         # Unregister follower
         with contextlib.suppress(KeyError):
             SESSION_FOLLOWERS.get(sess_id, set()).discard(q)
+        with contextlib.suppress(Exception):
+            await q.put(None)
+        with contextlib.suppress(Exception):
+            await sender
+
+
+@app.websocket("/ws/room/{room_id}")
+async def ws_room_participant(websocket: WebSocket, room_id: str) -> None:
+    """Room participant WebSocket for real-time updates."""
+    if room_id not in SEMINAR_ROOMS:
+        await websocket.close(code=4404, reason="Room not found")
+        return
+        
+    await websocket.accept()
+    get_logger().info(f"Room participant connected to room: {room_id}")
+
+    q: asyncio.Queue[Optional[dict]] = asyncio.Queue()
+    room_participants = ROOM_PARTICIPANTS.setdefault(room_id, set())
+    room_participants.add(q)
+    
+    room = SEMINAR_ROOMS[room_id]
+    
+    # Send current room status
+    await websocket.send_json({
+        "type": "room_status",
+        "is_live": room.is_live,
+        "participant_count": len(room_participants)
+    })
+    
+    # If room has a presenter session, send existing transcript
+    if room.presenter_session_id and room.presenter_session_id in ACTIVE_SESSIONS:
+        session_state = ACTIVE_SESSIONS[room.presenter_session_id]
+        await websocket.send_json({
+            "type": "transcript",
+            "transcript": session_state.transcript.to_serializable()
+        })
+
+    sender = asyncio.create_task(_follower_sender(websocket, q))
+    try:
+        # Room participants are receive-only; keep connection open
+        while True:
+            msg = await websocket.receive()
+            if "type" in msg and msg["type"] == "websocket.disconnect":
+                break
+    finally:
+        # Unregister participant
+        with contextlib.suppress(KeyError):
+            room_participants.discard(q)
         with contextlib.suppress(Exception):
             await q.put(None)
         with contextlib.suppress(Exception):
