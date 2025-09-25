@@ -1,15 +1,10 @@
 // Analytics Dashboard JavaScript
 class AnalyticsDashboard {
     constructor() {
-        this.roomId = new URLSearchParams(window.location.search).get('room');
+        this.roomId = new URLSearchParams(window.location.search).get('room') || 'all';
         this.currentHours = 24;
         this.charts = {};
         this.refreshInterval = null;
-        
-        if (!this.roomId) {
-            alert('Room ID is required. Please access this page with ?room=ROOM_ID');
-            return;
-        }
         
         this.init();
     }
@@ -19,22 +14,26 @@ class AnalyticsDashboard {
         this.initCharts();
         this.loadData();
         
-        // Auto-refresh every 30 seconds
+        // Auto-refresh every 60 seconds (reduced frequency to prevent performance issues)
         this.refreshInterval = setInterval(() => {
-            this.loadData();
-        }, 30000);
+            if (!document.hidden) {
+                this.loadData();
+            }
+        }, 60000);
         
         // Update page title with room ID
         document.title = `Analytics - Room ${this.roomId}`;
         
         // Add room info to header
-        const header = document.querySelector('.dashboard-header');
-        const roomInfo = document.createElement('p');
-        roomInfo.className = 'room-info';
-        roomInfo.innerHTML = `Room ID: <code>${this.roomId}</code>`;
-        roomInfo.style.color = 'var(--muted)';
-        roomInfo.style.marginTop = '10px';
-        header.appendChild(roomInfo);
+        const header = document.querySelector('.app-header');
+        if (header) {
+            const roomInfo = document.createElement('p');
+            roomInfo.className = 'room-info';
+            roomInfo.innerHTML = `Room ID: <code>${this.roomId}</code>`;
+            roomInfo.style.color = 'var(--muted)';
+            roomInfo.style.marginTop = '10px';
+            header.appendChild(roomInfo);
+        }
     }
     
     setupEventListeners() {
@@ -55,8 +54,14 @@ class AnalyticsDashboard {
     }
     
     initCharts() {
-        // Participant activity chart
-        const participantCtx = document.getElementById('participantChart').getContext('2d');
+        try {
+            // Participant activity chart
+            const participantCanvas = document.getElementById('participantChart');
+            if (!participantCanvas) {
+                console.warn('Participant chart canvas not found');
+                return;
+            }
+            const participantCtx = participantCanvas.getContext('2d');
         this.charts.participant = new Chart(participantCtx, {
             type: 'line',
             data: {
@@ -134,6 +139,9 @@ class AnalyticsDashboard {
                 }
             }
         });
+        } catch (error) {
+            console.error('Error initializing charts:', error);
+        }
     }
     
     async loadData() {
@@ -196,7 +204,13 @@ class AnalyticsDashboard {
             return;
         }
         
-        const labels = timeSeries.map(item => {
+        // Limit data points to prevent performance issues (max 100 points)
+        const maxDataPoints = 100;
+        const limitedTimeSeries = timeSeries.length > maxDataPoints 
+            ? timeSeries.slice(-maxDataPoints) 
+            : timeSeries;
+        
+        const labels = limitedTimeSeries.map(item => {
             const date = new Date(item.timestamp);
             return date.toLocaleTimeString('en-US', { 
                 hour: '2-digit', 
@@ -204,13 +218,16 @@ class AnalyticsDashboard {
             });
         });
         
-        const currentData = timeSeries.map(item => item.current_participants || 0);
-        const peakData = timeSeries.map(item => item.peak_participants || 0);
+        const currentData = limitedTimeSeries.map(item => item.current_participants || 0);
+        const peakData = limitedTimeSeries.map(item => item.peak_participants || 0);
         
-        this.charts.participant.data.labels = labels;
-        this.charts.participant.data.datasets[0].data = currentData;
-        this.charts.participant.data.datasets[1].data = peakData;
-        this.charts.participant.update('none');
+        // Check if chart exists before updating
+        if (this.charts.participant) {
+            this.charts.participant.data.labels = labels;
+            this.charts.participant.data.datasets[0].data = currentData;
+            this.charts.participant.data.datasets[1].data = peakData;
+            this.charts.participant.update('none');
+        }
     }
     
     updateEventsChart(timeSeries) {
@@ -228,12 +245,21 @@ class AnalyticsDashboard {
     updateEventsList(events) {
         const eventsList = document.getElementById('eventsList');
         
+        if (!eventsList) {
+            console.warn('Events list element not found');
+            return;
+        }
+        
         if (!events || events.length === 0) {
             eventsList.innerHTML = '<p style="text-align: center; color: var(--muted); padding: 20px;">No recent activity</p>';
             return;
         }
         
-        const eventsHTML = events.map(event => {
+        // Limit events to prevent performance issues (max 50 events)
+        const maxEvents = 50;
+        const limitedEvents = events.length > maxEvents ? events.slice(-maxEvents) : events;
+        
+        const eventsHTML = limitedEvents.map(event => {
             const time = new Date(event.timestamp).toLocaleTimeString();
             const eventClass = event.event_type === 'join' ? 'event-join' : 'event-leave';
             const icon = event.event_type === 'join' ? '👋' : '👋';

@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Room Analytics Dashboard</title>
+    <title>Analytics - Live Seminar Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@100..900&family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -218,11 +221,32 @@
     </style>
 </head>
 <body>
-    <div class="analytics-dashboard">
-        <div class="dashboard-header">
-            <h1 class="dashboard-title">📊 Room Analytics Dashboard</h1>
-            <p class="section-description">Real-time participant statistics and engagement metrics</p>
+    <header class="app-header">
+        <div>
+            <h1>📊 Analytics</h1>
+            <p class="subtitle">Real-time participant statistics and engagement metrics</p>
         </div>
+        <div class="header-controls">
+            <div id="userInfo" class="user-info-container">
+                <span id="welcomeText" class="welcome-text">Loading...</span>
+                <button id="logoutBtn" class="logout-button">
+                    <span class="icon">�</span>
+                    <span>Logout</span>
+                </button>
+            </div>
+            <button onclick="location.href='/dashboard'" class="secondary-button">
+                <span class="icon">🏠</span>
+                <span>Dashboard</span>
+            </button>
+            <button onclick="location.href='/settings'" class="secondary-button">
+                <span class="icon">⚙️</span>
+                <span>Settings</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="app-main">
+        <div class="analytics-dashboard">
 
         <div class="refresh-controls">
             <div class="time-filter">
@@ -276,8 +300,10 @@
                 <div class="loading-spinner"></div>
             </div>
         </div>
-    </div>
+        </div>
+    </main>
 
+    <script src="/static/auth.js"></script>
     <script src="/static/analytics-dashboard.js"></script>
 </body>
 </html>

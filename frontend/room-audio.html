@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Room Audio Playback</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #ffffff, #e0e7ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .room-info {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .audio-controls {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .control-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.75rem 2rem;
+            border: none;
+            border-radius: 25px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .progress-container {
+            margin: 1.5rem 0;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.1s ease;
+        }
+
+        .time-display {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .playlist {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .playlist h3 {
+            margin-bottom: 1.5rem;
+            color: #e0e7ff;
+        }
+
+        .segment-item {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        .segment-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .segment-item.active {
+            background: rgba(102, 126, 234, 0.3);
+            border-color: #667eea;
+        }
+
+        .segment-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .segment-meta {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .language-badges {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .language-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .language-badge.en {
+            background: rgba(34, 197, 94, 0.3);
+            color: #86efac;
+        }
+
+        .language-badge.th {
+            background: rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+            text-align: center;
+        }
+
+        .playback-speed {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .speed-control {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 20px;
+            color: white;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .speed-control:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .speed-control.active {
+            background: rgba(102, 126, 234, 0.5);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .control-buttons {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .btn {
+                justify-content: center;
+            }
+
+            .segment-info {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎵 Room Audio Playback</h1>
+            <p id="room-title">Loading room information...</p>
+        </div>
+
+        <div class="room-info">
+            <div id="room-details">
+                <p><strong>Room ID:</strong> <span id="room-id">-</span></p>
+                <p><strong>Total Audio Files:</strong> <span id="total-files">-</span></p>
+                <p><strong>Status:</strong> <span id="room-status">Loading...</span></p>
+            </div>
+        </div>
+
+        <div class="audio-controls">
+            <div class="control-buttons">
+                <button class="btn btn-primary" id="play-btn" disabled>
+                    ▶️ Play
+                </button>
+                <button class="btn btn-secondary" id="pause-btn" disabled>
+                    ⏸️ Pause
+                </button>
+                <button class="btn btn-secondary" id="stop-btn" disabled>
+                    ⏹️ Stop
+                </button>
+                <button class="btn btn-secondary" id="prev-btn" disabled>
+                    ⏮️ Previous
+                </button>
+                <button class="btn btn-secondary" id="next-btn" disabled>
+                    ⏭️ Next
+                </button>
+            </div>
+
+            <div class="progress-container">
+                <div class="progress-bar" id="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div class="time-display">
+                    <span id="current-time">00:00</span>
+                    <span id="total-time">00:00</span>
+                </div>
+            </div>
+
+            <div class="playback-speed">
+                <span>Speed:</span>
+                <button class="speed-control" data-speed="0.5">0.5x</button>
+                <button class="speed-control active" data-speed="1">1x</button>
+                <button class="speed-control" data-speed="1.25">1.25x</button>
+                <button class="speed-control" data-speed="1.5">1.5x</button>
+                <button class="speed-control" data-speed="2">2x</button>
+            </div>
+        </div>
+
+        <div class="playlist">
+            <h3>📝 Audio Segments</h3>
+            <div id="playlist-container">
+                <div class="loading">Loading audio segments...</div>
+            </div>
+        </div>
+    </div>
+
+    <audio id="audio-player" preload="metadata"></audio>
+
+    <script>
+        class RoomAudioPlayer {
+            constructor() {
+                this.roomId = new URLSearchParams(window.location.search).get('room') || 'demo';
+                this.playlist = [];
+                this.currentIndex = 0;
+                this.audio = document.getElementById('audio-player');
+                this.isPlaying = false;
+                
+                this.initializeElements();
+                this.setupEventListeners();
+                this.loadRoomData();
+            }
+
+            initializeElements() {
+                this.playBtn = document.getElementById('play-btn');
+                this.pauseBtn = document.getElementById('pause-btn');
+                this.stopBtn = document.getElementById('stop-btn');
+                this.prevBtn = document.getElementById('prev-btn');
+                this.nextBtn = document.getElementById('next-btn');
+                this.progressBar = document.getElementById('progress-bar');
+                this.progressFill = document.getElementById('progress-fill');
+                this.currentTimeEl = document.getElementById('current-time');
+                this.totalTimeEl = document.getElementById('total-time');
+                this.playlistContainer = document.getElementById('playlist-container');
+            }
+
+            setupEventListeners() {
+                // Control buttons
+                this.playBtn.addEventListener('click', () => this.play());
+                this.pauseBtn.addEventListener('click', () => this.pause());
+                this.stopBtn.addEventListener('click', () => this.stop());
+                this.prevBtn.addEventListener('click', () => this.previousSegment());
+                this.nextBtn.addEventListener('click', () => this.nextSegment());
+
+                // Audio events
+                this.audio.addEventListener('loadedmetadata', () => this.updateUI());
+                this.audio.addEventListener('timeupdate', () => this.updateProgress());
+                this.audio.addEventListener('ended', () => this.nextSegment());
+                this.audio.addEventListener('play', () => this.onPlay());
+                this.audio.addEventListener('pause', () => this.onPause());
+
+                // Progress bar clicking
+                this.progressBar.addEventListener('click', (e) => this.seekTo(e));
+
+                // Speed controls
+                document.querySelectorAll('.speed-control').forEach(btn => {
+                    btn.addEventListener('click', (e) => this.setPlaybackSpeed(e));
+                });
+            }
+
+            async loadRoomData() {
+                try {
+                    // Load room info and playlist
+                    const [roomResponse, playlistResponse] = await Promise.all([
+                        fetch(`/api/rooms/${this.roomId}`),
+                        fetch(`/api/rooms/${this.roomId}/audio/playlist`)
+                    ]);
+
+                    if (!roomResponse.ok || !playlistResponse.ok) {
+                        throw new Error('Failed to load room data');
+                    }
+
+                    const roomData = await roomResponse.json();
+                    const playlistData = await playlistResponse.json();
+
+                    this.updateRoomInfo(roomData);
+                    this.loadPlaylist(playlistData.playlist);
+
+                } catch (error) {
+                    console.error('Error loading room data:', error);
+                    this.showError('Failed to load room audio data');
+                }
+            }
+
+            updateRoomInfo(roomData) {
+                document.getElementById('room-title').textContent = roomData.title || `Room ${this.roomId}`;
+                document.getElementById('room-id').textContent = this.roomId;
+                document.getElementById('room-status').textContent = roomData.status || 'Unknown';
+            }
+
+            loadPlaylist(playlist) {
+                this.playlist = playlist;
+                document.getElementById('total-files').textContent = playlist.length;
+
+                if (playlist.length === 0) {
+                    this.playlistContainer.innerHTML = '<div class="error">No audio segments found for this room</div>';
+                    return;
+                }
+
+                this.renderPlaylist();
+                this.loadSegment(0);
+            }
+
+            renderPlaylist() {
+                const html = this.playlist.map((segment, index) => `
+                    <div class="segment-item" data-index="${index}" onclick="audioPlayer.loadSegment(${index})">
+                        <div class="segment-info">
+                            <div>
+                                <strong>Segment ${segment.segment_id}</strong>
+                                <div class="segment-meta">
+                                    Files: ${Object.keys(segment.files).length} language(s)
+                                </div>
+                            </div>
+                            <div class="language-badges">
+                                ${Object.keys(segment.files).map(lang => 
+                                    `<span class="language-badge ${lang}">${lang}</span>`
+                                ).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+
+                this.playlistContainer.innerHTML = html;
+            }
+
+            loadSegment(index) {
+                if (index < 0 || index >= this.playlist.length) return;
+
+                this.currentIndex = index;
+                const segment = this.playlist[index];
+                
+                // Prefer English audio, fallback to any available
+                const audioLang = segment.files.en ? 'en' : Object.keys(segment.files)[0];
+                const audioUrl = segment.files[audioLang]?.url;
+
+                if (audioUrl) {
+                    this.audio.src = audioUrl;
+                    this.updatePlaylistUI();
+                    this.enableControls();
+                } else {
+                    this.showError('No audio file found for this segment');
+                }
+            }
+
+            updatePlaylistUI() {
+                document.querySelectorAll('.segment-item').forEach((item, index) => {
+                    item.classList.toggle('active', index === this.currentIndex);
+                });
+            }
+
+            enableControls() {
+                this.playBtn.disabled = false;
+                this.pauseBtn.disabled = false;
+                this.stopBtn.disabled = false;
+                this.prevBtn.disabled = this.currentIndex === 0;
+                this.nextBtn.disabled = this.currentIndex === this.playlist.length - 1;
+            }
+
+            play() {
+                this.audio.play().catch(error => {
+                    console.error('Error playing audio:', error);
+                    this.showError('Failed to play audio');
+                });
+            }
+
+            pause() {
+                this.audio.pause();
+            }
+
+            stop() {
+                this.audio.pause();
+                this.audio.currentTime = 0;
+                this.updateProgress();
+            }
+
+            previousSegment() {
+                if (this.currentIndex > 0) {
+                    this.loadSegment(this.currentIndex - 1);
+                }
+            }
+
+            nextSegment() {
+                if (this.currentIndex < this.playlist.length - 1) {
+                    this.loadSegment(this.currentIndex + 1);
+                }
+            }
+
+            seekTo(event) {
+                const rect = this.progressBar.getBoundingClientRect();
+                const clickX = event.clientX - rect.left;
+                const percentage = clickX / rect.width;
+                this.audio.currentTime = percentage * this.audio.duration;
+            }
+
+            setPlaybackSpeed(event) {
+                const speed = parseFloat(event.target.dataset.speed);
+                this.audio.playbackRate = speed;
+
+                document.querySelectorAll('.speed-control').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                event.target.classList.add('active');
+            }
+
+            updateProgress() {
+                if (this.audio.duration) {
+                    const percentage = (this.audio.currentTime / this.audio.duration) * 100;
+                    this.progressFill.style.width = `${percentage}%`;
+                    
+                    this.currentTimeEl.textContent = this.formatTime(this.audio.currentTime);
+                    this.totalTimeEl.textContent = this.formatTime(this.audio.duration);
+                }
+            }
+
+            updateUI() {
+                this.updateProgress();
+            }
+
+            onPlay() {
+                this.isPlaying = true;
+                this.playBtn.textContent = '⏸️ Pause';
+            }
+
+            onPause() {
+                this.isPlaying = false;
+                this.playBtn.textContent = '▶️ Play';
+            }
+
+            formatTime(seconds) {
+                if (isNaN(seconds)) return '00:00';
+                
+                const minutes = Math.floor(seconds / 60);
+                const remainingSeconds = Math.floor(seconds % 60);
+                return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+            }
+
+            showError(message) {
+                this.playlistContainer.innerHTML = `<div class="error">${message}</div>`;
+            }
+        }
+
+        // Initialize player when page loads
+        let audioPlayer;
+        document.addEventListener('DOMContentLoaded', () => {
+            audioPlayer = new RoomAudioPlayer();
+        });
+    </script>
+</body>
+</html>

@@ -13,123 +13,137 @@
   <header class="app-header">
     <div>
       <h1>🎓 Live Seminar Platform</h1>
-      <p class="subtitle">Create and manage live seminars with real-time English-Thai subtitles and audio recording.</p>
+      <p class="subtitle">Admin Dashboard - Manage live seminars with real-time English-Thai subtitles</p>
     </div>
     <div class="header-controls">
+      <div id="userInfo" class="user-info-container">
+        <span id="welcomeText" class="welcome-text">Loading...</span>
+        <button id="logoutBtn" class="logout-button">
+          <span class="icon">🚪</span>
+          <span>Logout</span>
+        </button>
+      </div>
       <button id="createRoomBtn" class="primary-button">
         <span class="icon">➕</span>
-        <span>Create New Room</span>
+        <span>Create Room</span>
       </button>
-      <button id="adminBtn" class="secondary-button">
-        <span class="icon">👨‍💼</span>
-        <span>Admin Panel</span>
+      <button onclick="location.href='/analytics'" class="secondary-button">
+        <span class="icon">📊</span>
+        <span>Analytics</span>
       </button>
-      <a href="/static/provider-config.html" class="settings-link" title="AI Provider Settings">🎯</a>
-      <a href="/settings" class="settings-link" title="System Settings">⚙️</a>
-      <span id="statusChip" class="status status-idle">Ready</span>
+      <button onclick="location.href='/settings'" class="secondary-button">
+        <span class="icon">⚙️</span>
+        <span>Settings</span>
+      </button>
     </div>
   </header>
 
   <main class="app-main">
-    <!-- Room Management Section -->
-    <section class="room-management" id="roomManagement">
-      <div class="section-header">
-        <h2>📚 Seminar Rooms</h2>
-        <p class="section-description">Create and manage live seminar rooms with real-time subtitles and audio recording.</p>
-      </div>
-      
-      <div class="room-creation" id="roomCreation" style="display: none;">
-        <div class="creation-form">
-          <div class="form-header">
-            <h3>✨ Create New Seminar Room</h3>
-            <p>Start a new seminar session with live subtitles and audio recording</p>
-          </div>
-          <div class="form-group">
-            <label for="roomTitleInput">Room Title</label>
-            <input type="text" id="roomTitleInput" placeholder="e.g., AI in Education Workshop" maxlength="100" required>
-            <div class="input-hint">Give your seminar a descriptive title</div>
-          </div>
-          <div class="form-group">
-            <label for="roomDescInput">Description (Optional)</label>
-            <textarea id="roomDescInput" placeholder="Brief description of the seminar..." maxlength="500"></textarea>
-          </div>
-          <div class="creation-buttons">
-            <button id="confirmCreateBtn" class="primary-button">
-              <span class="icon">🚀</span>
-              <span>Create & Start Room</span>
-            </button>
-            <button id="cancelCreateBtn" class="secondary-button">Cancel</button>
+    <div class="dashboard-grid">
+      <!-- Room Management Section -->
+      <section class="dashboard-card room-management" id="roomManagement">
+        <div class="section-header">
+          <h2>📚 Seminar Rooms</h2>
+          <p class="section-description">Create and manage live seminar rooms with real-time subtitles and audio recording.</p>
+        </div>
+        
+        <div class="room-creation" id="roomCreation" style="display: none;">
+          <div class="creation-form">
+            <div class="form-header">
+              <h3>✨ Create New Seminar Room</h3>
+              <p>Start a new seminar session with live subtitles and audio recording</p>
+            </div>
+            <div class="form-fields">
+              <div class="field-group">
+                <label for="roomTitle">Room Title</label>
+                <input type="text" id="roomTitle" placeholder="e.g., Introduction to AI and Machine Learning" />
+              </div>
+              <div class="field-group">
+                <label for="roomDescription">Description</label>
+                <textarea id="roomDescription" placeholder="Provide a brief description of what this seminar will cover. This helps participants understand the content and purpose of the session."></textarea>
+              </div>
+              <div class="field-row">
+                <div class="field-group">
+                  <label for="maxParticipants">Max Participants</label>
+                  <input type="number" id="maxParticipants" min="1" max="1000" value="50" />
+                </div>
+                <div class="field-group">
+                  <label for="roomPassword">Password (Optional)</label>
+                  <input type="password" id="roomPassword" placeholder="Leave blank for public access" />
+                </div>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button id="createRoomSubmitBtn" class="primary-button">
+                <span class="icon">🚀</span>
+                <span>Create Room</span>
+              </button>
+              <button id="cancelCreateBtn" class="secondary-button">Cancel</button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="room-list" id="roomList">
-        <div class="loading">
-          <div class="spinner"></div>
-          <span>Loading rooms...</span>
-        </div>
-      </div>
-
-      <!-- Admin Panel (hidden by default) -->
-      <div class="admin-panel" id="adminPanel" style="display: none;">
-        <div class="panel-header">
-          <h3>👨‍💼 Admin Panel</h3>
-          <button id="closeAdminBtn" class="close-btn">✕</button>
-        </div>
-        <div class="admin-tabs">
-          <button class="tab-btn active" data-tab="rooms">Rooms</button>
-          <button class="tab-btn" data-tab="files">Audio Files</button>
-          <button class="tab-btn" data-tab="transcripts">Transcripts</button>
-        </div>
-        <div class="admin-content">
-          <div class="tab-content active" id="adminRooms">
-            <div class="admin-room-list"></div>
-          </div>
-          <div class="tab-content" id="adminFiles">
-            <div class="file-browser"></div>
-          </div>
-          <div class="tab-content" id="adminTranscripts">
-            <div class="transcript-list"></div>
+        <div class="room-list" id="roomList">
+          <div class="loading">
+            <div class="spinner"></div>
+            <span>Loading rooms...</span>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- Original Transcription Interface (now hidden by default) -->
-    <section class="transcription-section" id="transcriptionSection" style="display: none;">
-      <h2>Direct Transcription (Legacy Mode)</h2>
-        <div class="controls">
-        <div class="control-row">
-          <button id="startBtn" class="primary">Start</button>
-          <button id="stopBtn" disabled>Stop</button>
-          <button id="clearBtn">Clear</button>
-          <button id="saveBtn" disabled>Save (.txt)</button>
-          <a id="tpLink" class="button" target="_blank" rel="noopener" style="display:none">Open Teleprompter</a>
-        </div>
-        <div class="control-row secondary">
-          <label class="toggle">
-            <input type="checkbox" id="englishToggle" checked />
-            <span>Show English preview</span>
-          </label>
-          <div class="font-size">
-            <span>Caption size:</span>
-            <button data-size="s" class="size-btn">S</button>
-            <button data-size="m" class="size-btn active">M</button>
-            <button data-size="l" class="size-btn">L</button>
+      <!-- Active Session Interface (for when connected to a room) -->
+      <section class="dashboard-card captions" id="captions" data-size="m" style="display: none;">
+        <div class="session-header">
+          <h3>🔴 Live Session</h3>
+          <div id="statusChip" class="status status-idle">Idle</div>
+          <div class="session-controls">
+            <div class="control-row primary">
+              <button id="startBtn" class="primary-button">
+                <span class="icon">🎤</span>
+                <span>Start Recording</span>
+              </button>
+              <button id="stopBtn" class="secondary-button" disabled>
+                <span class="icon">⏹️</span>
+                <span>Stop</span>
+              </button>
+              <button id="clearBtn" class="secondary-button">
+                <span class="icon">🗑️</span>
+                <span>Clear</span>
+              </button>
+              <button id="saveBtn" class="secondary-button" disabled>
+                <span class="icon">💾</span>
+                <span>Save Transcript</span>
+              </button>
+            </div>
+            <div class="control-row secondary">
+              <label class="toggle">
+                <input type="checkbox" id="englishToggle" checked />
+                <span>Show English preview</span>
+              </label>
+              <div class="font-size">
+                <span>Size:</span>
+                <button data-size="s" class="size-btn">S</button>
+                <button data-size="m" class="size-btn active">M</button>
+                <button data-size="l" class="size-btn">L</button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+        <div class="caption-content">
+          <div class="caption-line thai" id="thaiCaption">Ready to receive live subtitles...</div>
+          <div class="caption-line english" id="englishCaption">English preview will appear here.</div>
+          <div class="history" id="history"></div>
+        </div>
+      </section>
 
-    <section class="captions" id="captions" data-size="m">
-      <div class="caption-line thai" id="thaiCaption">เริ่มเมื่อคุณกด Start</div>
-      <div class="caption-line english" id="englishCaption">English preview will appear here.</div>
-      <div class="history" id="history"></div>
-    </section>
-
-    <section class="log" id="log"></section>
+      <section class="dashboard-card log">
+        <h4>📝 System Log</h4>
+        <div class="log-content" id="log">System ready...</div>
+      </section>
+    </div>
   </main>
 
+  <script src="/static/auth.js"></script>
   <script src="/static/room-manager.js"></script>
   <script src="/static/app.js" type="module"></script>
 </body>

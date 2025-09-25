@@ -4,6 +4,8 @@ import asyncio
 import contextlib
 import json
 import os
+import wave
+import audioop
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -11,18 +13,21 @@ from typing import Dict, Optional
 from uuid import uuid4
 
 from fastapi import (
-    FastAPI, 
-    WebSocket, 
-    WebSocketDisconnect, 
-    HTTPException, 
-    Depends
+    FastAPI,
+    WebSocket,
+    WebSocketDisconnect,
+    HTTPException,
+    Depends,
+    status,
 )
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
+from .auth import auth_service, get_current_user_dep, require_admin_dep
 from .database import init_database, get_db
 from .db_service import DatabaseService, AsyncDatabaseService
 from .models import ROOM_PARTICIPANTS
@@ -57,6 +62,12 @@ class Settings(BaseSettings):
         alias="CORS_ORIGINS",
     )
     audio_sample_rate: int = Field(default=16000, alias="AUDIO_SAMPLE_RATE")
+    audio_storage_path: str = Field(
+        default="/app/media/audio", alias="AUDIO_STORAGE_PATH"
+    )
+    max_audio_file_size_mb: int = Field(
+        default=100, alias="MAX_AUDIO_FILE_SIZE_MB"
+    )
     min_silence_ms: int = Field(default=600, alias="MIN_SILENCE_MS")
     status_broadcast_interval_ms: int = Field(
         default=1000,
@@ -71,6 +82,82 @@ class Settings(BaseSettings):
         case_sensitive = False
         env_file = ".env"
         extra = "ignore"
+
+
+# Audio storage utilities
+async def ensure_audio_directory(path: str) -> None:
+    """Ensure audio storage directory exists"""
+    os.makedirs(path, exist_ok=True)
+
+
+def get_audio_filename(room_id: str, segment_id: int, language: str) -> str:
+    """Generate standardized audio filename"""
+    return f"{segment_id:06d}_{language}.wav"
+
+
+def get_audio_file_path(
+    storage_path: str, room_id: str, segment_id: int, language: str
+) -> str:
+    """Get full path for audio file"""
+    filename = get_audio_filename(room_id, segment_id, language)
+    return os.path.join(storage_path, room_id, filename)
+
+
+async def save_audio_to_file(
+    audio_data: bytes, file_path: str, sample_rate: int = 16000
+) -> bool:
+    """Save audio data to WAV file"""
+    try:
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        # Save as WAV file
+        with wave.open(file_path, 'wb') as wav_file:
+            wav_file.setnchannels(1)  # Mono
+            wav_file.setsampwidth(2)  # 16-bit
+            wav_file.setframerate(sample_rate)
+            
+            # Convert to 16-bit if needed
+            if len(audio_data) % 2 != 0:
+                audio_data = audio_data[:-1]  # Remove odd byte
+            
+            wav_file.writeframes(audio_data)
+        
+        return True
+    except Exception as e:
+        print(f"Error saving audio file {file_path}: {e}")
+        return False
+
+
+async def get_room_audio_files(storage_path: str, room_id: str) -> list[dict]:
+    """Get all audio files for a room with metadata"""
+    room_path = os.path.join(storage_path, room_id)
+    if not os.path.exists(room_path):
+        return []
+    
+    files = []
+    for filename in sorted(os.listdir(room_path)):
+        if filename.endswith('.wav'):
+            file_path = os.path.join(room_path, filename)
+            # Parse filename: {segment_id:06d}_{language}.wav
+            parts = filename.replace('.wav', '').split('_')
+            if len(parts) >= 2:
+                try:
+                    segment_id = int(parts[0])  # First part is segment_id
+                    language = parts[1]         # Second part is language
+                    file_size = os.path.getsize(file_path)
+                    files.append({
+                        'segment_id': segment_id,
+                        'language': language,
+                        'filename': filename,
+                        'path': file_path,
+                        'size': file_size
+                    })
+                except ValueError:
+                    continue
+    
+    return sorted(files, key=lambda x: x['segment_id'])
+
 
 
 def _parse_origins(raw: str) -> list[str]:
@@ -157,6 +244,102 @@ async def startup_event() -> None:
     await MT_PROVIDER.setup()
 
 
+# ===== AUTHENTICATION ENDPOINTS =====
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: dict
+
+class UserResponse(BaseModel):
+    username: str
+    email: str
+    is_admin: bool
+    created_at: datetime
+    is_active: bool
+
+class CreateUserRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+    is_admin: bool = False
+
+@app.post("/api/auth/login", response_model=LoginResponse)
+async def login(request: LoginRequest):
+    """Authenticate user and return access tokens"""
+    user = auth_service.authenticate_user(request.username, request.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token = auth_service.create_access_token(
+        data={"sub": user["username"], "is_admin": user.get("is_admin", False)}
+    )
+    refresh_token = auth_service.create_refresh_token(
+        data={"sub": user["username"]}
+    )
+    
+    return LoginResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user={k: v for k, v in user.items() if k != "hashed_password"}
+    )
+
+@app.post("/api/auth/refresh")
+async def refresh_token(refresh_token: str):
+    """Refresh access token using refresh token"""
+    payload = auth_service.verify_token(refresh_token)
+    if not payload or payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token"
+        )
+    
+    username = payload.get("sub")
+    user = auth_service.get_user_by_username(username)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
+        )
+    
+    access_token = auth_service.create_access_token(
+        data={"sub": username, "is_admin": user.get("is_admin", False)}
+    )
+    
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/api/auth/me", response_model=UserResponse)
+async def get_current_user_info(current_user: dict = Depends(get_current_user_dep)):
+    """Get current user information"""
+    return UserResponse(**current_user)
+
+@app.post("/api/auth/users", response_model=UserResponse)
+async def create_user(request: CreateUserRequest, current_user: dict = Depends(require_admin_dep)):
+    """Create a new user (admin only)"""
+    user = auth_service.create_user(
+        username=request.username,
+        email=request.email,
+        password=request.password,
+        is_admin=request.is_admin
+    )
+    return UserResponse(**user)
+
+@app.get("/api/auth/users", response_model=list[UserResponse])
+async def list_users(current_user: dict = Depends(require_admin_dep)):
+    """List all users (admin only)"""
+    users = auth_service.list_users()
+    return [UserResponse(**user) for user in users]
+
+
 @app.get("/health")
 async def health() -> JSONResponse:
     return JSONResponse({
@@ -167,13 +350,52 @@ async def health() -> JSONResponse:
     })
 
 
-@app.get("/")
-async def index() -> FileResponse:
+@app.get("/", include_in_schema=False)
+async def root_redirect() -> RedirectResponse:
+    """Primary entry point redirects to login page."""
+    return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+
+
+@app.get("/dashboard")
+async def dashboard() -> FileResponse:
+    """Main dashboard - authentication handled by frontend JavaScript"""
     return FileResponse(FRONTEND_DIR / "index.html")
 
 
-@app.get("/settings")
+@app.get("/login")
+async def login_page() -> FileResponse:
+    return FileResponse(FRONTEND_DIR / "login.html")
+
+
+@app.get("/analytics")
+async def analytics_page() -> FileResponse:
+    """Analytics dashboard - authentication handled by frontend JavaScript"""
+    return FileResponse(FRONTEND_DIR / "analytics.html")
+
+
+@app.get("/settings") 
 async def settings_page() -> FileResponse:
+    """Settings page - authentication handled by frontend JavaScript"""
+    return FileResponse(FRONTEND_DIR / "settings.html")
+
+
+@app.get("/public")
+async def public_rooms() -> FileResponse:
+    """Public participant access - no authentication required"""
+    return FileResponse(FRONTEND_DIR / "participant.html")
+
+
+@app.get("/room-audio")
+async def room_audio_page() -> FileResponse:
+    """Room audio playback page - authentication handled by frontend"""
+    return FileResponse(FRONTEND_DIR / "room-audio.html")
+
+
+@app.get("/settings-admin")
+async def settings_admin_page(
+    current_user: dict = Depends(require_admin_dep),
+) -> FileResponse:
+    """Settings page - Admin only"""
     return FileResponse(FRONTEND_DIR / "settings.html")
 
 
@@ -394,10 +616,6 @@ async def update_settings(new_settings: dict) -> JSONResponse:
     })
 
 
-@app.get("/api/env")
-async def get_env_vars() -> JSONResponse:
-    """Get current environment variables for editing."""
-    # Only return safe-to-edit variables
     editable_vars = {
         "ASR_PROVIDER": os.environ.get("ASR_PROVIDER", ""),
         "MT_PROVIDER": os.environ.get("MT_PROVIDER", ""),
@@ -411,9 +629,6 @@ async def get_env_vars() -> JSONResponse:
         ),
         "FASTER_WHISPER_LANGUAGE": os.environ.get(
             "FASTER_WHISPER_LANGUAGE", ""
-        ),
-        "FASTER_WHISPER_BEAM_SIZE": os.environ.get(
-            "FASTER_WHISPER_BEAM_SIZE", ""
         ),
         "FASTER_WHISPER_CHUNK_DURATION": os.environ.get(
             "FASTER_WHISPER_CHUNK_DURATION", ""
@@ -435,6 +650,27 @@ async def get_env_vars() -> JSONResponse:
         "variables": editable_vars,
         "timestamp": utc_timestamp_ms(),
     })
+
+
+@app.get("/api/env")
+async def get_env_vars() -> JSONResponse:
+    """Get current environment variables for settings page."""
+    try:
+        import os
+        # Return current environment variables that are safe to display
+        env_vars = {
+            "ASR_PROVIDER": os.getenv("ASR_PROVIDER", "vosk"),
+            "MT_PROVIDER": os.getenv("MT_PROVIDER", "marian"),
+            "JWT_ACCESS_TOKEN_EXPIRE_MINUTES": os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"),
+            "ADMIN_USERNAME": os.getenv("ADMIN_USERNAME", "admin"),
+            "ADMIN_EMAIL": os.getenv("ADMIN_EMAIL", "admin@example.com"),
+        }
+        return JSONResponse(content={"status": "success", "env_vars": env_vars})
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
 
 
 @app.post("/api/env")
@@ -566,15 +802,16 @@ class RoomResponse(BaseModel):
 
 
 @app.post("/api/rooms", response_model=RoomResponse)
-async def create_room(request: CreateRoomRequest) -> RoomResponse:
-    """Create a new seminar room."""
+async def create_room(request: CreateRoomRequest, current_user: dict = Depends(get_current_user_dep)) -> RoomResponse:
+    """Create a new seminar room. Requires authentication."""
     # Create room in database
     room = await AsyncDatabaseService.create_room(
         title=request.title,
         description=getattr(request, 'description', None)
     )
     
-    base_url = "http://localhost:8000"  # In production, get from request
+    # Get base URL from environment or request
+    base_url = os.getenv("BASE_URL", "http://localhost:8000")
     return RoomResponse(
         room_id=room.room_id,
         title=room.title,
@@ -712,6 +949,32 @@ async def update_room_status(room_id: str, update: RoomStatusUpdate) -> dict:
     return {"success": True, "is_live": updated_room.is_live}
 
 
+# Platform Analytics Endpoints
+@app.get("/api/analytics/platform")
+async def get_platform_analytics(hours: int = 24):
+    """Get platform-wide analytics."""
+    try:
+        # Get total rooms count
+        total_rooms = len(await AsyncDatabaseService.get_all_rooms())
+        
+        # Mock data for now - you can implement actual analytics later
+        return JSONResponse(content={
+            "status": "success",
+            "total_rooms": total_rooms,
+            "active_rooms": 0,
+            "total_participants": 0,
+            "total_sessions": 0,
+            "events": [],
+            "participant_timeline": [],
+            "hours": hours
+        })
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+
 # Participant Analytics Endpoints
 @app.get("/api/rooms/{room_id}/analytics")
 async def get_room_analytics(room_id: str, hours: int = 24):
@@ -779,6 +1042,93 @@ async def get_current_participants(room_id: str):
         
     except Exception as e:
         get_logger().error(f"Error getting current participants for {room_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/rooms/{room_id}/audio/files")
+async def get_room_audio_files_api(room_id: str):
+    """Get list of audio files for a room"""
+    try:
+        files = await get_room_audio_files(settings.audio_storage_path, room_id)
+        return {
+            "room_id": room_id,
+            "files": files,
+            "total_files": len(files)
+        }
+    except Exception as e:
+        get_logger().error(f"Error getting audio files for {room_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/rooms/{room_id}/audio/{segment_id}/{language}")
+async def get_audio_file(room_id: str, segment_id: int, language: str):
+    """Stream audio file for a specific segment"""
+    try:
+        file_path = get_audio_file_path(
+            settings.audio_storage_path, room_id, segment_id, language
+        )
+        
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="Audio file not found")
+        
+        # Check file size
+        file_size = os.path.getsize(file_path)
+        max_size = settings.max_audio_file_size_mb * 1024 * 1024
+        if file_size > max_size:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Audio file too large: {file_size} bytes"
+            )
+        
+        return FileResponse(
+            path=file_path,
+            media_type='audio/wav',
+            filename=get_audio_filename(room_id, segment_id, language)
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        get_logger().error(f"Error serving audio file: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/rooms/{room_id}/audio/playlist")
+async def get_room_audio_playlist(room_id: str):
+    """Get chronological playlist of all audio files for room playback"""
+    try:
+        files = await get_room_audio_files(settings.audio_storage_path, room_id)
+        
+        # Group by segment_id and create playlist entries
+        playlist = []
+        segments = {}
+        
+        for file_info in files:
+            seg_id = file_info['segment_id']
+            if seg_id not in segments:
+                segments[seg_id] = {
+                    'segment_id': seg_id,
+                    'files': {}
+                }
+            segments[seg_id]['files'][file_info['language']] = {
+                'url': f"/api/rooms/{room_id}/audio/{seg_id}/"
+                       f"{file_info['language']}",
+                'size': file_info['size'],
+                'filename': file_info['filename']
+            }
+        
+        # Convert to sorted playlist
+        for seg_id in sorted(segments.keys()):
+            playlist.append(segments[seg_id])
+        
+        return {
+            "room_id": room_id,
+            "playlist": playlist,
+            "total_segments": len(playlist)
+        }
+        
+    except Exception as e:
+        get_logger().error(f"Error creating audio playlist for {room_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1039,24 +1389,46 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             timestamp = utc_timestamp_ms()
             await asr_stream.push_audio(chunk, timestamp)
             
-            # Save audio chunk to database if linked to room
+            # Save audio chunk to file and database if linked to room
             if state.room_id:
                 try:
+                    # Ensure audio storage directory exists
+                    await ensure_audio_directory(settings.audio_storage_path)
+                    
+                    # Save audio chunk to file
+                    segment_id = int(timestamp / 1000)  # Use timestamp as segment
+                    audio_file_path = get_audio_file_path(
+                        settings.audio_storage_path,
+                        state.room_id,
+                        segment_id,
+                        "en"
+                    )
+                    
+                    # Save to file (async)
+                    audio_saved = await save_audio_to_file(
+                        chunk, audio_file_path, state.sample_rate
+                    )
+                    
+                    # Save metadata to database with file path
                     await AsyncDatabaseService.save_audio_segment(
                         room_id=state.room_id,
                         segment_id=f"{sess_id}-{timestamp}",
                         timestamp_ms=timestamp,
                         duration_ms=(len(chunk) * 1000 //
                                      (state.sample_rate * 2)),
-                        sequence_number=int(timestamp / 1000),  # rough seq
-                        audio_data=chunk,
-                        audio_language="en",  # assuming English input
+                        sequence_number=segment_id,
+                        # Empty if saved to file
+                        audio_data=chunk if not audio_saved else b"",
+                        audio_language="en",
                         sample_rate=state.sample_rate,
                         channels=1,
-                        bit_depth=16
+                        format="wav",
+                        file_path=audio_file_path if audio_saved else None
                     )
-                except Exception:
-                    # Don't log every chunk save error to avoid spam
+                except Exception as e:
+                    # Log significant errors but don't spam
+                    if timestamp % 10000 == 0:  # Log every ~10 seconds
+                        get_logger().error(f"Audio save error: {e}")
                     pass
             
             events = vad.process(chunk)

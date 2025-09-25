@@ -1,5 +1,111 @@
 services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: seminar-db
+    environment:
+      POSTGRES_DB: seminar_platform
+      POSTGRES_USER: seminar_user
+      POSTGRES_PASSWORD: seminar_pass
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seminar_user -d seminar_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: seminar-redis
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: seminar-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./scripts/servers.json:/pgadmin4/servers.json:ro
+      - ./scripts/pgpass:/tmp/pgpassfile:ro
+    ports:
+      - "5050:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - default
+
+  # Main Application
   app:
-    extends:
-      file: docker/docker-compose.yml
-      service: app
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: en-th-subtitles
+    env_file:
+      - ./.env.docker
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+      - ./sample_audio:/app/sample_audio:ro
+      - ./frontend:/app/frontend:ro
+      - ./subtitles:/app/subtitles
+      - ./media:/app/media
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+      - ./.env.docker:/app/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Named volumes for persistent data
+volumes:
+  db_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  media_data:
+    driver: local
+  log_data:
+    driver: local
+  backup_data:
+    driver: local
+
+# Network for inter-service communication
+networks:
+  default:
+    name: seminar_network
+    driver: bridge

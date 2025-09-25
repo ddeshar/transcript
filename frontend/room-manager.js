@@ -4,16 +4,12 @@ class RoomManager {
   constructor() {
     this.elements = {
       createRoomBtn: document.getElementById('createRoomBtn'),
-      adminBtn: document.getElementById('adminBtn'),
       roomCreation: document.getElementById('roomCreation'),
-      roomTitleInput: document.getElementById('roomTitleInput'),
-      roomDescInput: document.getElementById('roomDescInput'),
-      confirmCreateBtn: document.getElementById('confirmCreateBtn'),
+      roomTitleInput: document.getElementById('roomTitle'),
+      roomDescInput: document.getElementById('roomDescription'),
+      confirmCreateBtn: document.getElementById('createRoomSubmitBtn'),
       cancelCreateBtn: document.getElementById('cancelCreateBtn'),
-      roomList: document.getElementById('roomList'),
-      adminPanel: document.getElementById('adminPanel'),
-      closeAdminBtn: document.getElementById('closeAdminBtn'),
-      transcriptionSection: document.getElementById('transcriptionSection')
+      roomList: document.getElementById('roomList')
     };
     
     this.rooms = [];
@@ -35,10 +31,6 @@ class RoomManager {
       this.showCreateForm();
     });
 
-    this.elements.adminBtn.addEventListener('click', () => {
-      this.showAdminPanel();
-    });
-
     // Room creation form
     this.elements.confirmCreateBtn.addEventListener('click', () => {
       this.createRoom();
@@ -52,18 +44,6 @@ class RoomManager {
       if (e.key === 'Enter' && !e.shiftKey) {
         this.createRoom();
       }
-    });
-
-    // Admin panel
-    this.elements.closeAdminBtn.addEventListener('click', () => {
-      this.hideAdminPanel();
-    });
-
-    // Admin tabs
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.switchAdminTab(btn.dataset.tab);
-      });
     });
 
     // Close admin panel on ESC key
@@ -87,6 +67,12 @@ class RoomManager {
   }
 
   async createRoom() {
+    // Check authentication first
+    if (!window.authManager || !window.authManager.requireAuth()) {
+      this.showNotification('Please login to create rooms', 'error');
+      return;
+    }
+
     const title = this.elements.roomTitleInput.value.trim();
     const description = this.elements.roomDescInput.value.trim();
     
@@ -101,7 +87,8 @@ class RoomManager {
     this.elements.confirmCreateBtn.innerHTML = '<span class="spinner"></span> Creating...';
 
     try {
-      const response = await fetch('/api/rooms', {
+      // Use authenticated fetch
+      const response = await window.authManager.authenticatedFetch('/api/rooms', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -126,7 +113,7 @@ class RoomManager {
 
         // Auto-navigate to presenter interface
         setTimeout(() => {
-          window.open(`/static/room.html?room=${room.room_id}&role=presenter`, '_blank');
+          window.open(`/room/${room.room_id}`, '_blank');
         }, 1500);
       } else {
         const error = await response.json();
@@ -290,10 +277,10 @@ class RoomManager {
     document.getElementById('roomManagement').style.display = 'block';
   }
 
-  // Admin Panel Methods
-  showAdminPanel() {
+  // Analytics Panel Methods
+  showAnalyticsPanel() {
     this.elements.adminPanel.style.display = 'flex';
-    this.loadAdminData();
+    this.loadAnalyticsData();
   }
 
   hideAdminPanel() {
@@ -306,26 +293,102 @@ class RoomManager {
       btn.classList.toggle('active', btn.dataset.tab === tabName);
     });
 
-    // Update tab content
+    // Update tab content  
     document.querySelectorAll('.tab-content').forEach(content => {
-      content.classList.toggle('active', content.id === `admin${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+      const expectedId = `admin${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`;
+      content.classList.toggle('active', content.id === expectedId);
     });
 
     this.currentTab = tabName;
-    this.loadAdminData();
+    this.loadAnalyticsData();
   }
 
-  async loadAdminData() {
+  async loadAnalyticsData() {
     switch (this.currentTab) {
-      case 'rooms':
-        await this.loadAdminRooms();
+      case 'analytics':
+        await this.loadPlatformStats();
+        await this.loadRoomAnalytics();
         break;
       case 'files':
-        await this.loadAdminFiles();
+        await this.loadMediaFiles();
         break;
       case 'transcripts':
-        await this.loadAdminTranscripts();
+        await this.loadExportHistory();
         break;
+      case 'settings':
+        // Settings tab is static, no loading needed
+        break;
+    }
+  }
+
+  async loadPlatformStats() {
+    try {
+      const response = await fetch('/api/rooms');
+      if (response.ok) {
+        const data = await response.json();
+        const rooms = data.rooms || [];
+        
+        document.getElementById('totalRooms').textContent = rooms.length;
+        document.getElementById('activeRooms').textContent = rooms.filter(r => r.is_live).length;
+        document.getElementById('totalParticipants').textContent = rooms.reduce((sum, r) => sum + (r.participant_count || 0), 0);
+        document.getElementById('totalSessions').textContent = rooms.filter(r => !r.is_live && r.ended_at).length;
+      }
+    } catch (error) {
+      console.error('Error loading platform stats:', error);
+    }
+  }
+
+  async loadRoomAnalytics() {
+    const container = document.getElementById('roomAnalyticsList');
+    container.innerHTML = '<div class="loading">Loading room analytics...</div>';
+    
+    try {
+      const response = await fetch('/api/rooms');
+      if (response.ok) {
+        const data = await response.json();
+        const rooms = data.rooms || [];
+        
+        if (rooms.length === 0) {
+          container.innerHTML = '<div class="no-data">No rooms found</div>';
+          return;
+        }
+        
+        const roomsHtml = rooms.map(room => `
+          <div class="analytics-room-card">
+            <div class="room-header">
+              <h5>${this.escapeHtml(room.title)}</h5>
+              <span class="room-status ${room.is_live ? 'status-live' : 'status-ended'}">
+                ${room.is_live ? 'LIVE' : 'ENDED'}
+              </span>
+            </div>
+            <div class="room-stats">
+              <div class="stat-item">
+                <span class="stat-label">Participants:</span>
+                <span class="stat-value">${room.participant_count || 0}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Duration:</span>
+                <span class="stat-value">${this.formatDuration(room.duration_ms || 0)}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Created:</span>
+                <span class="stat-value">${new Date(room.created_at).toLocaleDateString()}</span>
+              </div>
+            </div>
+            <div class="room-actions">
+              <button class="view-analytics-btn" onclick="roomManager.viewRoomAnalytics('${room.room_id}')">
+                View Details
+              </button>
+              <a href="/room/${room.room_id}" target="_blank" class="join-link">Visit Room</a>
+            </div>
+          </div>
+        `).join('');
+        
+        container.innerHTML = roomsHtml;
+      }
+    } catch (error) {
+      console.error('Error loading room analytics:', error);
+      container.innerHTML = '<div class="error">Failed to load room analytics</div>';
     }
   }
 
@@ -487,12 +550,72 @@ class RoomManager {
       notification.classList.add('show');
     }, 10);
   }
+
+  async loadMediaFiles() {
+    const container = document.getElementById('mediaFileList');
+    container.innerHTML = '<div class="loading">Loading media files...</div>';
+    
+    // Placeholder for media files - would need backend endpoint
+    container.innerHTML = '<div class="no-data">Media file management coming soon</div>';
+  }
+
+  async loadExportHistory() {
+    const container = document.getElementById('exportHistory');
+    container.innerHTML = '<div class="loading">Loading export history...</div>';
+    
+    // Placeholder for export history - would need backend endpoint
+    container.innerHTML = '<div class="no-data">Export history coming soon</div>';
+  }
+
+  async viewRoomAnalytics(roomId) {
+    try {
+      const response = await fetch(`/api/rooms/${roomId}/analytics`);
+      if (response.ok) {
+        const analytics = await response.json();
+        
+        // Open analytics in new window
+        const analyticsWindow = window.open('', '_blank', 'width=800,height=600');
+        analyticsWindow.document.write(`
+          <html>
+            <head><title>Room Analytics - ${analytics.room_title}</title></head>
+            <body style="font-family: Arial, sans-serif; padding: 20px;">
+              <h1>Analytics for ${analytics.room_title}</h1>
+              <pre style="background: #f5f5f5; padding: 20px; border-radius: 8px;">${JSON.stringify(analytics, null, 2)}</pre>
+            </body>
+          </html>
+        `);
+      }
+    } catch (error) {
+      console.error('Error loading room analytics:', error);
+      this.showNotification('Failed to load room analytics', 'error');
+    }
+  }
+
+  formatDuration(ms) {
+    if (!ms) return '0m';
+    
+    const minutes = Math.floor(ms / 60000);
+    const hours = Math.floor(minutes / 60);
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes % 60}m`;
+    } else {
+      return `${minutes}m`;
+    }
+  }
+
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
 }
 
 // Initialize room manager when DOM is loaded
 let roomManager;
 document.addEventListener('DOMContentLoaded', () => {
   roomManager = new RoomManager();
+  window.roomManager = roomManager;
 });
 
 // CSS animation for live indicator

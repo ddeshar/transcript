@@ -15,14 +15,40 @@ from sqlalchemy import (
     Text,
     create_engine,
     event,
+    text,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.types import TypeDecorator, VARCHAR
 
-# Database configuration
-DATABASE_URL = "sqlite:///./seminar_platform.db"  # For production: PostgreSQL
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# Database configuration with environment variable support
+import os
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./seminar_platform.db")
+DATABASE_POOL_SIZE = int(os.getenv("DATABASE_POOL_SIZE", "10"))
+DATABASE_MAX_OVERFLOW = int(os.getenv("DATABASE_MAX_OVERFLOW", "20"))
+DATABASE_ECHO = os.getenv("DATABASE_ECHO", "false").lower() == "true"
+
+# Configure engine based on database type
+if DATABASE_URL.startswith("postgresql"):
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=DATABASE_POOL_SIZE,
+        max_overflow=DATABASE_MAX_OVERFLOW,
+        echo=DATABASE_ECHO,
+        pool_pre_ping=True,  # Verify connections before use
+        pool_recycle=3600    # Recycle connections every hour
+    )
+elif DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        echo=DATABASE_ECHO
+    )
+else:
+    # Generic fallback
+    engine = create_engine(DATABASE_URL, echo=DATABASE_ECHO)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -107,9 +133,13 @@ class AudioSegment(Base):
     duration_ms = Column(Integer, nullable=False)
     sequence_number = Column(Integer, nullable=False)
     
-    # Audio data
+    # Audio data (legacy binary storage)
     audio_data_en = Column(LargeBinary, nullable=True)  # English audio
     audio_data_th = Column(LargeBinary, nullable=True)  # Thai audio
+    
+    # File paths (new file-based storage)
+    file_path_en = Column(String(500), nullable=True)  # English audio file
+    file_path_th = Column(String(500), nullable=True)  # Thai audio file
     
     # Metadata
     sample_rate = Column(Integer, default=16000)
@@ -261,8 +291,8 @@ class ParticipantEvent(Base):
     # Timing
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
     
-    # Metadata
-    metadata = Column(JSONType, nullable=True)  # Additional event data
+    # Event metadata  
+    event_metadata = Column(JSONType, nullable=True)  # Additional event data
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON response."""
@@ -277,7 +307,7 @@ class ParticipantEvent(Base):
             'ip_address': self.ip_address,
             'referrer': self.referrer,
             'timestamp': self.timestamp.isoformat(),
-            'metadata': self.metadata,
+            'event_metadata': self.event_metadata,
         }
 
 
@@ -362,20 +392,20 @@ def init_database():
     # Add any required indexes
     with engine.connect() as conn:
         # Index for efficient room lookup
-        conn.execute("""
+        conn.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_audio_segments_room_timestamp 
             ON audio_segments(room_id, timestamp_ms)
-        """)
+        """))
         
-        conn.execute("""
+        conn.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_subtitle_segments_room_timestamp 
             ON subtitle_segments(room_id, timestamp_ms)
-        """)
+        """))
         
-        conn.execute("""
+        conn.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_session_history_room_started 
             ON session_history(room_id, started_at)
-        """)
+        """))
         
         conn.commit()
 

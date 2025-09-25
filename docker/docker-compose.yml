@@ -1,4 +1,41 @@
 services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: seminar-db
+    environment:
+      POSTGRES_DB: seminar_platform
+      POSTGRES_USER: seminar_user
+      POSTGRES_PASSWORD: seminar_pass
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ../scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seminar_user -d seminar_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: seminar-redis
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Main Application
   app:
     build:
       context: ..
@@ -13,14 +50,24 @@ services:
       - ../sample_audio:/app/sample_audio:ro
       - ../frontend:/app/frontend:ro
       - ../subtitles:/app/subtitles
+      - media_data:/app/media
+      - log_data:/app/logs
+      - backup_data:/app/backups
       - ../.env.docker:/app/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
+  # Frontend (Optional - for separate frontend serving)
   frontend:
     build:
       context: ..
@@ -31,3 +78,42 @@ services:
     ports:
       - "5173:80"
     restart: unless-stopped
+
+# Named volumes for persistent data
+volumes:
+  db_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/postgres
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/redis
+  media_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/media
+  log_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/logs
+  backup_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/backups
+
+# Network for inter-service communication
+networks:
+  default:
+    name: seminar_network
+    driver: bridge

@@ -3,22 +3,65 @@ from __future__ import annotations
 from pathlib import Path
 
 from .asr_base import ASRProvider
-from .asr_vosk import VoskASRProvider
-from .asr_whispercpp import WhisperCppASRProvider
 from .asr_cloud import WhisperCloudASRProvider
-from .asr_faster_whisper import FasterWhisperASRProvider
 from .asr_whisper_gpt import WhisperGPTProvider
-from .asr_whisper_local import WhisperLocalProvider
-from .asr_hybrid import HybridASRProvider
 from .asr_mock import MockASRProvider
 from .mt_base import MTProvider
-from .mt_marian import MarianMTProvider
 from .mt_gtranslate import GoogleTranslateProvider
 from .mt_awstranslate import AWSTranslateProvider
 from .mt_openai_gpt import OpenAIGPTProvider
 from .mt_mock import MockMTProvider
-from .mt_ctranslate2 import CTranslate2MTProvider
 from .mt_simple_thai import SimpleThaiProvider
+
+# Optional heavy dependencies - only import if available
+try:
+    from .asr_vosk import VoskASRProvider
+    VOSK_AVAILABLE = True
+except ImportError:
+    VOSK_AVAILABLE = False
+    VoskASRProvider = None
+
+try:
+    from .asr_whispercpp import WhisperCppASRProvider
+    WHISPERCPP_AVAILABLE = True
+except ImportError:
+    WHISPERCPP_AVAILABLE = False
+    WhisperCppASRProvider = None
+
+try:
+    from .asr_faster_whisper import FasterWhisperASRProvider
+    FASTER_WHISPER_AVAILABLE = True
+except ImportError:
+    FASTER_WHISPER_AVAILABLE = False
+    FasterWhisperASRProvider = None
+
+try:
+    from .asr_whisper_local import WhisperLocalProvider
+    WHISPER_LOCAL_AVAILABLE = True
+except ImportError:
+    WHISPER_LOCAL_AVAILABLE = False
+    WhisperLocalProvider = None
+
+try:
+    from .asr_hybrid import HybridASRProvider
+    HYBRID_AVAILABLE = True
+except ImportError:
+    HYBRID_AVAILABLE = False
+    HybridASRProvider = None
+
+try:
+    from .mt_marian import MarianMTProvider
+    MARIAN_AVAILABLE = True
+except ImportError:
+    MARIAN_AVAILABLE = False
+    MarianMTProvider = None
+
+try:
+    from .mt_ctranslate2 import CTranslate2MTProvider
+    CTRANSLATE2_AVAILABLE = True
+except ImportError:
+    CTRANSLATE2_AVAILABLE = False
+    CTranslate2MTProvider = None
 
 
 def create_asr_provider(
@@ -28,12 +71,16 @@ def create_asr_provider(
     if name == "mock":
         return MockASRProvider()
     if name == "vosk":
+        if not VOSK_AVAILABLE:
+            raise RuntimeError("Vosk not available. Install with: pip install vosk")
         model_dir = Path(
             settings.get("VOSK_MODEL_DIR", base_dir / "models" / "vosk")
         )
         model_name = settings.get("VOSK_MODEL_NAME")
         return VoskASRProvider(model_dir=model_dir, model_name=model_name)
     if name == "whispercpp":
+        if not WHISPERCPP_AVAILABLE:
+            raise RuntimeError("WhisperCpp not available.")
         model_path = Path(
             settings.get(
                 "WHISPER_CPP_MODEL_PATH",
@@ -42,6 +89,8 @@ def create_asr_provider(
         )
         return WhisperCppASRProvider(model_path=model_path)
     if name == "faster_whisper":
+        if not FASTER_WHISPER_AVAILABLE:
+            raise RuntimeError("Faster-whisper not available.")
         model_size = settings.get("FASTER_WHISPER_MODEL", "small")
         device = settings.get("FASTER_WHISPER_DEVICE", "cpu")
         compute_type = settings.get("FASTER_WHISPER_COMPUTE_TYPE", "int8")
@@ -117,6 +166,8 @@ def create_mt_provider(
     if name == "mock":
         return MockMTProvider()
     if name in {"marian", "opus"}:
+        if not MARIAN_AVAILABLE:
+            raise RuntimeError("Marian MT not available.")
         model_dir = Path(
             settings.get("MARIAN_MODEL_DIR", base_dir / "models" / "marian")
         )
@@ -125,6 +176,8 @@ def create_mt_provider(
         )
         return MarianMTProvider(model_dir=model_dir, model_name=model_name)
     if name == "ctranslate2":
+        if not CTRANSLATE2_AVAILABLE:
+            raise RuntimeError("CTranslate2 not available.")
         model_dir = Path(
             settings.get(
                 "CT2_MODEL_DIR",

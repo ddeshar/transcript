@@ -129,7 +129,8 @@ class DatabaseService:
         audio_language: str = "en",
         sample_rate: int = 16000,
         channels: int = 1,
-        format: str = "wav"
+        format: str = "wav",
+        file_path: str = None
     ) -> AudioSegment:
         """Save an audio segment to the database."""
         segment = AudioSegment(
@@ -144,11 +145,15 @@ class DatabaseService:
             size_bytes=len(audio_data),
         )
         
-        # Store audio data based on language
+        # Store audio data and/or file path based on language
         if audio_language == "en":
             segment.audio_data_en = audio_data
+            if file_path:
+                segment.file_path_en = file_path
         elif audio_language == "th":
             segment.audio_data_th = audio_data
+            if file_path:
+                segment.file_path_th = file_path
             
         db.add(segment)
         db.commit()

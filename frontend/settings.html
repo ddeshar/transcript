@@ -51,10 +51,100 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1600px;
             margin: 0 auto;
             padding: 20px;
             position: relative;
+        }
+
+        .app-header {
+            background: var(--secondary-bg);
+            border-bottom: 2px solid var(--border-color);
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .app-header h1 {
+            color: var(--accent-blue);
+            font-size: 28px;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin: 5px 0 0 0;
+            opacity: 0.8;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .secondary-button {
+            background: linear-gradient(135deg, var(--tertiary-bg), var(--hover-bg));
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .secondary-button:hover {
+            background: var(--hover-bg);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .logout-button {
+            background: linear-gradient(135deg, var(--accent-red), #d32f2f);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .logout-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+        }
+
+        .user-info-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .welcome-text {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .app-main {
+            padding: 40px 0;
+            min-height: calc(100vh - 100px);
         }
 
         .header {
@@ -88,8 +178,9 @@
         .settings-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-bottom: 30px;
+            gap: 40px;
+            margin-bottom: 40px;
+            padding: 0 20px;
         }
 
         .settings-section {
@@ -273,8 +364,31 @@
         }
 
         .loading {
-            opacity: 0.6;
-            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: var(--text-secondary);
+            font-size: 16px;
+            background: var(--secondary-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .loading::after {
+            content: '';
+            margin-left: 10px;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--text-secondary);
+            border-top: 2px solid var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .notification {
@@ -371,11 +485,15 @@
         }
 
         .env-category-description {
-            font-size: 13px;
+            font-size: 14px;
             color: var(--text-secondary);
-            margin: 0;
-            font-style: italic;
-            opacity: 0.8;
+            margin: 5px 0 0 0;
+            line-height: 1.4;
+            opacity: 0.9;
+            background: rgba(148, 163, 184, 0.1);
+            padding: 8px 12px;
+            border-radius: 6px;
+            border-left: 3px solid var(--accent-color);
         }
 
         .env-category-vars {
@@ -486,11 +604,32 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>System Settings</h1>
-            <a href="/" class="back-btn">← Back to Subtitles</a>
+    <header class="app-header">
+        <div>
+            <h1>⚙️ Settings</h1>
+            <p class="subtitle">Configure your platform preferences and system settings</p>
         </div>
+        <div class="header-controls">
+            <div id="userInfo" class="user-info-container">
+                <span id="welcomeText" class="welcome-text">Loading...</span>
+                <button id="logoutBtn" class="logout-button">
+                    <span class="icon">🚪</span>
+                    <span>Logout</span>
+                </button>
+            </div>
+            <button onclick="location.href='/dashboard'" class="secondary-button">
+                <span class="icon">🏠</span>
+                <span>Dashboard</span>
+            </button>
+            <button onclick="location.href='/analytics'" class="secondary-button">
+                <span class="icon">📊</span>
+                <span>Analytics</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="app-main">
+        <div class="container">
 
         <div class="settings-grid">
             <!-- Speech Recognition Settings -->
@@ -743,6 +882,12 @@
             const container = document.getElementById('env-vars-container');
             container.innerHTML = '';
             
+            // Check if currentEnvVars is defined
+            if (!currentEnvVars) {
+                container.innerHTML = '<div class="loading">Loading environment variables...</div>';
+                return;
+            }
+            
             // Categorize variables with emojis and descriptions
             const categories = {
                 '⚙️ Core Providers': {
@@ -802,7 +947,7 @@
                 const varsContainer = categorySection.querySelector('.env-category-vars');
                 
                 categoryData.vars.forEach(varName => {
-                    if (varName in currentEnvVars) {
+                    if (currentEnvVars && varName in currentEnvVars) {
                         const varDiv = document.createElement('div');
                         varDiv.className = 'env-var-item';
                         
@@ -1085,5 +1230,8 @@
         // Load settings on page load
         document.addEventListener('DOMContentLoaded', loadSettings);
     </script>
+    </main>
+
+    <script src="/static/auth.js"></script>
 </body>
 </html>
