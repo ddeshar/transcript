@@ -22,13 +22,16 @@ class DatabaseService:
 
     @staticmethod
     def create_room(
-        db: Session, title: str, description: str = None
+        db: Session, title: str, description: str = None, 
+        password: str = None, max_participants: int = None
     ) -> SeminarRoom:
         """Create a new seminar room."""
         room = SeminarRoom(
             room_id=uuid4().hex[:12],
             title=title,
             description=description,
+            password=password,
+            max_participants=max_participants,
         )
         db.add(room)
         db.commit()
@@ -361,12 +364,15 @@ class AsyncDatabaseService:
         return await loop.run_in_executor(None, func, *args, **kwargs)
     
     @classmethod
-    async def create_room(cls, title: str, description: str = None) -> SeminarRoom:
+    async def create_room(cls, title: str, description: str = None, 
+                         password: str = None, max_participants: int = None) -> SeminarRoom:
         """Async create room operation."""
         def _create_room():
             db = next(get_db())
             try:
-                return DatabaseService.create_room(db, title, description)
+                return DatabaseService.create_room(
+                    db, title, description, password, max_participants
+                )
             finally:
                 db.close()
                 

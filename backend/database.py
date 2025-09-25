@@ -76,6 +76,8 @@ class SeminarRoom(Base):
     room_id = Column(String(12), unique=True, index=True, nullable=False)
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
+    password = Column(String(255), nullable=True)  # Room access password
+    max_participants = Column(Integer, nullable=True)  # Room capacity limit
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -97,6 +99,8 @@ class SeminarRoom(Base):
             'room_id': self.room_id,
             'title': self.title,
             'description': self.description,
+            'password': self.password,
+            'max_participants': self.max_participants,
             'created_at': (
                 self.created_at.isoformat() if self.created_at else None
             ),

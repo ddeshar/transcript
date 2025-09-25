@@ -7,6 +7,8 @@ class RoomManager {
       roomCreation: document.getElementById('roomCreation'),
       roomTitleInput: document.getElementById('roomTitle'),
       roomDescInput: document.getElementById('roomDescription'),
+      maxParticipantsInput: document.getElementById('maxParticipants'),
+      roomPasswordInput: document.getElementById('roomPassword'),
       confirmCreateBtn: document.getElementById('createRoomSubmitBtn'),
       cancelCreateBtn: document.getElementById('cancelCreateBtn'),
       roomList: document.getElementById('roomList')
@@ -63,6 +65,9 @@ class RoomManager {
   hideCreateForm() {
     this.elements.roomCreation.style.display = 'none';
     this.elements.roomTitleInput.value = '';
+    this.elements.roomDescInput.value = '';
+    this.elements.maxParticipantsInput.value = '50'; // Reset to default
+    this.elements.roomPasswordInput.value = '';
     this.elements.createRoomBtn.style.display = 'inline-block';
   }
 
@@ -75,6 +80,8 @@ class RoomManager {
 
     const title = this.elements.roomTitleInput.value.trim();
     const description = this.elements.roomDescInput.value.trim();
+    const maxParticipants = parseInt(this.elements.maxParticipantsInput.value) || null;
+    const password = this.elements.roomPasswordInput.value.trim() || null;
     
     if (!title) {
       this.showNotification('Please enter a room title', 'error');
@@ -95,7 +102,9 @@ class RoomManager {
         },
         body: JSON.stringify({ 
           title,
-          description: description || null
+          description: description || null,
+          max_participants: maxParticipants,
+          password: password
         })
       });
 

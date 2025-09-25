@@ -812,11 +812,17 @@ async def teleprompter() -> FileResponse:
 
 class CreateRoomRequest(BaseModel):
     title: str
+    description: str | None = None
+    password: str | None = None
+    max_participants: int | None = None
 
 
 class RoomResponse(BaseModel):
     room_id: str
     title: str
+    description: str | None = None
+    password: str | None = None
+    max_participants: int | None = None
     is_live: bool
     participant_url: str
     presenter_url: str
@@ -824,6 +830,7 @@ class RoomResponse(BaseModel):
     started_at: str | None = None
     ended_at: str | None = None
     participant_count: int = 0
+    max_concurrent_participants: int = 0
     duration_ms: int | None = None
 
 
@@ -833,7 +840,9 @@ async def create_room(request: CreateRoomRequest, current_user: dict = Depends(g
     # Create room in database
     room = await AsyncDatabaseService.create_room(
         title=request.title,
-        description=getattr(request, 'description', None)
+        description=request.description,
+        password=request.password,
+        max_participants=request.max_participants
     )
     
     # Get base URL from environment or request
@@ -841,6 +850,9 @@ async def create_room(request: CreateRoomRequest, current_user: dict = Depends(g
     return RoomResponse(
         room_id=room.room_id,
         title=room.title,
+        description=room.description,
+        password=room.password,
+        max_participants=room.max_participants,
         is_live=room.is_live,
         participant_url=room.get_room_url(base_url),
         presenter_url=room.get_presenter_url(base_url),
@@ -848,6 +860,7 @@ async def create_room(request: CreateRoomRequest, current_user: dict = Depends(g
         started_at=room.started_at.isoformat() if room.started_at else None,
         ended_at=room.ended_at.isoformat() if room.ended_at else None,
         participant_count=len(ROOM_PARTICIPANTS.get(room.room_id, set())),
+        max_concurrent_participants=room.max_concurrent_participants,
         duration_ms=room.total_duration_ms
     )
 
@@ -863,6 +876,9 @@ async def list_rooms() -> list[RoomResponse]:
         rooms.append(RoomResponse(
             room_id=room.room_id,
             title=room.title,
+            description=room.description,
+            password=room.password,
+            max_participants=room.max_participants,
             is_live=room.is_live,
             participant_url=room.get_room_url(base_url),
             presenter_url=room.get_presenter_url(base_url),
@@ -871,6 +887,7 @@ async def list_rooms() -> list[RoomResponse]:
                         if room.started_at else None),
             ended_at=room.ended_at.isoformat() if room.ended_at else None,
             participant_count=len(ROOM_PARTICIPANTS.get(room.room_id, set())),
+            max_concurrent_participants=room.max_concurrent_participants,
             duration_ms=room.total_duration_ms
         ))
     
@@ -888,6 +905,9 @@ async def get_room(room_id: str) -> RoomResponse:
     return RoomResponse(
         room_id=room.room_id,
         title=room.title,
+        description=room.description,
+        password=room.password,
+        max_participants=room.max_participants,
         is_live=room.is_live,
         participant_url=room.get_room_url(base_url),
         presenter_url=room.get_presenter_url(base_url),
@@ -896,6 +916,7 @@ async def get_room(room_id: str) -> RoomResponse:
                     if room.started_at else None),
         ended_at=room.ended_at.isoformat() if room.ended_at else None,
         participant_count=len(ROOM_PARTICIPANTS.get(room.room_id, set())),
+        max_concurrent_participants=room.max_concurrent_participants,
         duration_ms=room.total_duration_ms
     )
 
@@ -1361,13 +1382,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             await AsyncDatabaseService.save_subtitle_segment(
                                 room_id=state.room_id,
                                 segment_id=message.get("segmentId", ""),
-                                timestamp_ms=message.get("startMs", 0),
-                                duration_ms=(message.get("endMs", 0) -
-                                             message.get("startMs", 0)),
+                                timestamp_ms=message.get("timestamp_ms", 0),
+                                duration_ms=0,  # Duration not available in this context
                                 sequence_number=len(
                                     state.transcript._segments
                                 ),
-                                text_en=message.get("text", ""),
+                                text_en=message.get("english", ""),
                                 text_th=message.get("thai", ""),
                                 confidence_en=message.get("confidence", 0.0),
                                 confidence_th=(
