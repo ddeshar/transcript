@@ -9,14 +9,22 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import (
+    FastAPI, 
+    WebSocket, 
+    WebSocketDisconnect, 
+    HTTPException, 
+    Depends
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
-from .models import SEMINAR_ROOMS, ROOM_PARTICIPANTS, SeminarRoom
+from .database import init_database, get_db
+from .db_service import DatabaseService, AsyncDatabaseService
+from .models import ROOM_PARTICIPANTS
 from .providers import create_asr_provider, create_mt_provider
 from .providers.asr_base import ASRStream
 from .providers.mt_base import MTProvider
@@ -98,6 +106,10 @@ MT_PROVIDER: MTProvider = create_mt_provider(
     base_dir=BASE_DIR,
     settings=os.environ,
 )
+
+# Initialize database on startup
+init_database()
+get_logger().info("Database initialized successfully")
 
 
 async def reload_providers() -> None:
@@ -555,8 +567,11 @@ class RoomResponse(BaseModel):
 @app.post("/api/rooms", response_model=RoomResponse)
 async def create_room(request: CreateRoomRequest) -> RoomResponse:
     """Create a new seminar room."""
-    room = SeminarRoom.create(request.title)
-    SEMINAR_ROOMS[room.room_id] = room
+    # Create room in database
+    room = await AsyncDatabaseService.create_room(
+        title=request.title,
+        description=getattr(request, 'description', None)
+    )
     
     base_url = "http://localhost:8000"  # In production, get from request
     return RoomResponse(
@@ -569,7 +584,7 @@ async def create_room(request: CreateRoomRequest) -> RoomResponse:
         started_at=room.started_at.isoformat() if room.started_at else None,
         ended_at=room.ended_at.isoformat() if room.ended_at else None,
         participant_count=len(ROOM_PARTICIPANTS.get(room.room_id, set())),
-        duration_ms=room._get_duration_ms()
+        duration_ms=room.total_duration_ms
     )
 
 
@@ -577,9 +592,10 @@ async def create_room(request: CreateRoomRequest) -> RoomResponse:
 async def list_rooms() -> list[RoomResponse]:
     """List all seminar rooms."""
     base_url = "http://localhost:8000"  # In production, get from request
+    rooms_data = await AsyncDatabaseService.list_rooms()
     rooms = []
     
-    for room in SEMINAR_ROOMS.values():
+    for room in rooms_data:
         rooms.append(RoomResponse(
             room_id=room.room_id,
             title=room.title,
@@ -587,10 +603,11 @@ async def list_rooms() -> list[RoomResponse]:
             participant_url=room.get_room_url(base_url),
             presenter_url=room.get_presenter_url(base_url),
             created_at=room.created_at.isoformat(),
-            started_at=room.started_at.isoformat() if room.started_at else None,
+            started_at=(room.started_at.isoformat()
+                        if room.started_at else None),
             ended_at=room.ended_at.isoformat() if room.ended_at else None,
             participant_count=len(ROOM_PARTICIPANTS.get(room.room_id, set())),
-            duration_ms=room._get_duration_ms()
+            duration_ms=room.total_duration_ms
         ))
     
     return sorted(rooms, key=lambda r: r.created_at, reverse=True)
@@ -599,10 +616,9 @@ async def list_rooms() -> list[RoomResponse]:
 @app.get("/api/rooms/{room_id}", response_model=RoomResponse)
 async def get_room(room_id: str) -> RoomResponse:
     """Get details of a specific room."""
-    if room_id not in SEMINAR_ROOMS:
+    room = await AsyncDatabaseService.get_room(room_id)
+    if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    
-    room = SEMINAR_ROOMS[room_id]
     base_url = "http://localhost:8000"  # In production, get from request
     
     return RoomResponse(
@@ -612,17 +628,19 @@ async def get_room(room_id: str) -> RoomResponse:
         participant_url=room.get_room_url(base_url),
         presenter_url=room.get_presenter_url(base_url),
         created_at=room.created_at.isoformat(),
-        started_at=room.started_at.isoformat() if room.started_at else None,
+        started_at=(room.started_at.isoformat()
+                    if room.started_at else None),
         ended_at=room.ended_at.isoformat() if room.ended_at else None,
         participant_count=len(ROOM_PARTICIPANTS.get(room.room_id, set())),
-        duration_ms=room._get_duration_ms()
+        duration_ms=room.total_duration_ms
     )
 
 
 @app.get("/room/{room_id}")
 async def room_page(room_id: str) -> FileResponse:
     """Serve the participant interface for a room."""
-    if room_id not in SEMINAR_ROOMS:
+    room = await AsyncDatabaseService.get_room(room_id)
+    if not room:
         raise HTTPException(status_code=404, detail="Room not found")
     return FileResponse(FRONTEND_DIR / "room.html")
 
@@ -630,7 +648,8 @@ async def room_page(room_id: str) -> FileResponse:
 @app.get("/present/{room_id}")
 async def presenter_page(room_id: str) -> FileResponse:
     """Serve the presenter interface for a room."""
-    if room_id not in SEMINAR_ROOMS:
+    room = await AsyncDatabaseService.get_room(room_id)
+    if not room:
         raise HTTPException(status_code=404, detail="Room not found")
     return FileResponse(FRONTEND_DIR / "presenter.html")
 
@@ -649,19 +668,20 @@ class RoomStatusUpdate(BaseModel):
 @app.put("/api/rooms/{room_id}/status")
 async def update_room_status(room_id: str, update: RoomStatusUpdate) -> dict:
     """Update room live status."""
-    if room_id not in SEMINAR_ROOMS:
+    room = await AsyncDatabaseService.get_room(room_id)
+    if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    
-    room = SEMINAR_ROOMS[room_id]
     
     if update.is_live and not room.is_live:
         # Starting live session
-        room.start_live(update.presenter_session_id or "")
+        updated_room = await AsyncDatabaseService.start_room(
+            room_id, update.presenter_session_id or ""
+        )
         
         # Notify all room participants that the session has started
         participants = ROOM_PARTICIPANTS.get(room_id, set())
         message = {
-            "type": "room_status", 
+            "type": "room_status",
             "is_live": True,
             "room_id": room_id,
             "participant_count": len(participants)
@@ -672,12 +692,12 @@ async def update_room_status(room_id: str, update: RoomStatusUpdate) -> dict:
                 
     elif not update.is_live and room.is_live:
         # Ending live session
-        room.end_live()
+        updated_room = await AsyncDatabaseService.end_room(room_id)
         
         # Notify all room participants that the session has ended
         participants = ROOM_PARTICIPANTS.get(room_id, set())
         message = {
-            "type": "room_status", 
+            "type": "room_status",
             "is_live": False,
             "room_id": room_id,
             "participant_count": len(participants)
@@ -685,8 +705,10 @@ async def update_room_status(room_id: str, update: RoomStatusUpdate) -> dict:
         for participant_queue in participants:
             with contextlib.suppress(Exception):
                 await participant_queue.put(message)
+    else:
+        updated_room = room
     
-    return {"success": True, "is_live": room.is_live}
+    return {"success": True, "is_live": updated_room.is_live}
 
 
 @dataclass
@@ -700,6 +722,7 @@ class ConnectionState:
     last_status: str = "idle"
     created_at: datetime = field(default_factory=datetime.utcnow)
     transcript_path: Path | None = None
+    room_id: str | None = None
 
     def reset_partial(self) -> None:
         self.last_partial = ""
@@ -833,9 +856,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             await q.put(message)
                 
                 # Broadcast to room participants if this session is a presenter
-                for room_id, room in SEMINAR_ROOMS.items():
+                active_rooms = await AsyncDatabaseService.get_active_rooms()
+                for room in active_rooms:
                     if room.presenter_session_id == sess_id:
-                        participants = ROOM_PARTICIPANTS.get(room_id, set())
+                        participants = ROOM_PARTICIPANTS.get(
+                            room.room_id, set()
+                        )
                         for participant_q in participants:
                             with contextlib.suppress(Exception):
                                 await participant_q.put(message)
@@ -844,6 +870,33 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if result.is_final:
                     state.transcript.add_segment(message)
                     auto_save_transcript(state)
+                    
+                    # Save to database if linked to a room
+                    if state.room_id:
+                        try:
+                            # Save subtitle segment
+                            await AsyncDatabaseService.save_subtitle_segment(
+                                room_id=state.room_id,
+                                segment_id=message.get("segmentId", ""),
+                                timestamp_ms=message.get("startMs", 0),
+                                duration_ms=(message.get("endMs", 0) -
+                                             message.get("startMs", 0)),
+                                sequence_number=len(state.transcript.segments),
+                                text_en=message.get("text", ""),
+                                text_th=message.get("thai", ""),
+                                confidence_en=message.get("confidence", 0.0),
+                                confidence_th=(
+                                    getattr(translation, 'confidence', 0.0)
+                                    if 'translation' in locals() else 0.0
+                                ),
+                                processing_time_ms=message.get(
+                                    "processingMs", 0
+                                ),
+                                is_final=True
+                            )
+                        except Exception as e:
+                            get_logger().error(f"Failed to save subtitle: {e}")
+                    
                     await send({"type": "status", "status": "listening"})
         except asyncio.CancelledError:
             pass
@@ -869,11 +922,17 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     room_id = data.get("roomId")
                     
                     # Link session to room if roomId provided
-                    if room_id and room_id in SEMINAR_ROOMS:
-                        room = SEMINAR_ROOMS[room_id]
-                        if not room.presenter_session_id:
-                            room.presenter_session_id = sess_id
-                            get_logger().info(f"Linked session {sess_id} to room {room_id}")
+                    if room_id:
+                        room = await AsyncDatabaseService.get_room(room_id)
+                        if room:
+                            state.room_id = room_id
+                            if not room.presenter_session_id:
+                                await AsyncDatabaseService.update_presenter_session(
+                                    room_id, sess_id
+                                )
+                                get_logger().info(
+                                    f"Linked session {sess_id} to room {room_id}"
+                                )
                     
                     if isinstance(sr, int) and sr > 0:
                         state.sample_rate = sr
@@ -906,7 +965,29 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 continue
             if asr_stream is None:
                 continue
-            await asr_stream.push_audio(chunk, utc_timestamp_ms())
+            timestamp = utc_timestamp_ms()
+            await asr_stream.push_audio(chunk, timestamp)
+            
+            # Save audio chunk to database if linked to room
+            if state.room_id:
+                try:
+                    await AsyncDatabaseService.save_audio_segment(
+                        room_id=state.room_id,
+                        segment_id=f"{sess_id}-{timestamp}",
+                        timestamp_ms=timestamp,
+                        duration_ms=(len(chunk) * 1000 //
+                                     (state.sample_rate * 2)),
+                        sequence_number=int(timestamp / 1000),  # rough seq
+                        audio_data=chunk,
+                        audio_language="en",  # assuming English input
+                        sample_rate=state.sample_rate,
+                        channels=1,
+                        bit_depth=16
+                    )
+                except Exception:
+                    # Don't log every chunk save error to avoid spam
+                    pass
+            
             events = vad.process(chunk)
             for evt in events:
                 if evt.type == "speech":
@@ -983,7 +1064,8 @@ async def ws_follow(websocket: WebSocket, sess_id: str) -> None:
 @app.websocket("/ws/room/{room_id}")
 async def ws_room_participant(websocket: WebSocket, room_id: str) -> None:
     """Room participant WebSocket for real-time updates."""
-    if room_id not in SEMINAR_ROOMS:
+    room = await AsyncDatabaseService.get_room(room_id)
+    if not room:
         await websocket.close(code=4404, reason="Room not found")
         return
         
@@ -994,8 +1076,6 @@ async def ws_room_participant(websocket: WebSocket, room_id: str) -> None:
     room_participants = ROOM_PARTICIPANTS.setdefault(room_id, set())
     room_participants.add(q)
     
-    room = SEMINAR_ROOMS[room_id]
-    
     # Send current room status
     await websocket.send_json({
         "type": "room_status",
@@ -1004,7 +1084,8 @@ async def ws_room_participant(websocket: WebSocket, room_id: str) -> None:
     })
     
     # If room has a presenter session, send existing transcript
-    if room.presenter_session_id and room.presenter_session_id in ACTIVE_SESSIONS:
+    if (room.presenter_session_id and
+            room.presenter_session_id in ACTIVE_SESSIONS):
         session_state = ACTIVE_SESSIONS[room.presenter_session_id]
         await websocket.send_json({
             "type": "transcript",

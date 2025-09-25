@@ -91,8 +91,6 @@ class SeminarRoom:
         return int((end_time - self.started_at).total_seconds() * 1000)
 
 
-# Global storage for rooms and participants
-# In production, this should be backed by a database
-SEMINAR_ROOMS: Dict[str, SeminarRoom] = {}
+# Global storage for participants (still needed for WebSocket management)
 # room_id -> set of participant WebSocket queues
 ROOM_PARTICIPANTS: Dict[str, set] = {}

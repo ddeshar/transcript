@@ -47,6 +47,10 @@ function appendLog(message) {
   elements.log.textContent = message;
 }
 
+let reconnectAttempts = 0;
+let maxReconnectAttempts = 5;
+let keepAliveInterval = null;
+
 function connectWebSocket() {
   if (websocket) {
     websocket.close();
@@ -60,6 +64,15 @@ function connectWebSocket() {
     setStatus("listening", "Microphone ready. Start speaking.");
     websocket.send(JSON.stringify({ type: "config", sampleRate: TARGET_SAMPLE_RATE }));
     elements.saveBtn.disabled = true;
+    reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+    
+    // Start keep-alive ping every 30 seconds
+    if (keepAliveInterval) clearInterval(keepAliveInterval);
+    keepAliveInterval = setInterval(() => {
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+        websocket.send(JSON.stringify({ type: "ping" }));
+      }
+    }, 30000);
   };
 
   websocket.onmessage = (event) => {
@@ -72,11 +85,33 @@ function connectWebSocket() {
     setStatus("error", "WebSocket connection error.");
   };
 
-  websocket.onclose = () => {
-    appendLog("Connection closed.");
-    elements.startBtn.disabled = false;
-    elements.stopBtn.disabled = true;
-    elements.saveBtn.disabled = transcriptSegments.length === 0;
+  websocket.onclose = (event) => {
+    console.log("WebSocket closed:", event.code, event.reason);
+    if (keepAliveInterval) {
+      clearInterval(keepAliveInterval);
+      keepAliveInterval = null;
+    }
+    
+    // Only attempt reconnection if it wasn't a manual close and we're still "active"
+    if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts && mediaStream) {
+      reconnectAttempts++;
+      console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})...`);
+      setStatus("error", `Connection lost. Reconnecting... (${reconnectAttempts}/${maxReconnectAttempts})`);
+      
+      // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 16000);
+      setTimeout(() => {
+        if (mediaStream) { // Only reconnect if we're still supposed to be active
+          connectWebSocket();
+        }
+      }, delay);
+    } else {
+      // Manual close or max reconnects reached
+      appendLog("Connection closed.");
+      elements.startBtn.disabled = false;
+      elements.stopBtn.disabled = true;
+      elements.saveBtn.disabled = transcriptSegments.length === 0;
+    }
   };
 }
 
@@ -241,18 +276,47 @@ function stop() {
 
 async function setupAudioPipeline(stream) {
   audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  
+  // Monitor audio context state changes and auto-resume if suspended
+  audioContext.addEventListener('statechange', () => {
+    console.log('Audio context state changed:', audioContext.state);
+    if (audioContext.state === 'suspended') {
+      // Try to resume after a short delay
+      setTimeout(() => {
+        if (audioContext.state === 'suspended') {
+          audioContext.resume().then(() => {
+            console.log('Auto-resumed audio context');
+          }).catch(err => {
+            console.warn('Failed to auto-resume audio context:', err);
+          });
+        }
+      }, 1000);
+    }
+  });
+  
   const source = audioContext.createMediaStreamSource(stream);
   const bufferSize = 4096;
   processor = audioContext.createScriptProcessor(bufferSize, 1, 1);
 
   processor.onaudioprocess = (event) => {
+    // Ensure audio context is running
+    if (audioContext.state === 'suspended') {
+      audioContext.resume().catch(err => console.warn('Failed to resume audio context:', err));
+      return;
+    }
+    
     if (!websocket || websocket.readyState !== WebSocket.OPEN) {
       return;
     }
-    const inputBuffer = event.inputBuffer.getChannelData(0);
-    const downsampled = downsampleBuffer(inputBuffer, audioContext.sampleRate, TARGET_SAMPLE_RATE);
-    const pcm = convertFloat32ToPCM(downsampled);
-    websocket.send(pcm);
+    
+    try {
+      const inputBuffer = event.inputBuffer.getChannelData(0);
+      const downsampled = downsampleBuffer(inputBuffer, audioContext.sampleRate, TARGET_SAMPLE_RATE);
+      const pcm = convertFloat32ToPCM(downsampled);
+      websocket.send(pcm);
+    } catch (error) {
+      console.error('Audio processing error:', error);
+    }
   };
 
   source.connect(processor);
@@ -324,9 +388,40 @@ elements.sizeButtons.forEach((btn) => {
 });
 
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden && websocket && websocket.readyState === WebSocket.OPEN) {
-    websocket.send(JSON.stringify({ type: "control", action: "stop" }));
-    websocket.close();
+  // Keep audio processing running even when tab is hidden/minimized
+  console.log("Page visibility changed:", document.hidden ? "hidden" : "visible");
+  
+  if (!document.hidden) {
+    // Page is now visible - recover audio and WebSocket if needed
+    if (audioContext && audioContext.state === 'suspended') {
+      audioContext.resume().then(() => {
+        console.log("Audio context resumed after tab became visible");
+      });
+    }
+    
+    // Check WebSocket connection health and reconnect if needed
+    if (mediaStream && (!websocket || websocket.readyState !== WebSocket.OPEN)) {
+      console.log("WebSocket disconnected while in background, reconnecting...");
+      connectWebSocket();
+    }
+  }
+});
+
+// Handle page focus events for additional recovery
+window.addEventListener('focus', () => {
+  console.log('Window focused');
+  
+  if (mediaStream) {
+    // Resume audio context if suspended
+    if (audioContext && audioContext.state === 'suspended') {
+      audioContext.resume().catch(err => console.warn('Failed to resume audio context:', err));
+    }
+    
+    // Check and recover WebSocket connection
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+      console.log('Recovering WebSocket connection on window focus');
+      connectWebSocket();
+    }
   }
 });
 
