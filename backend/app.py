@@ -129,6 +129,32 @@ async def save_audio_to_file(
         return False
 
 
+async def generate_thai_audio_placeholder(
+    file_path: str, duration_ms: int, sample_rate: int = 16000
+) -> bool:
+    """Generate a placeholder silent audio file for Thai audio"""
+    try:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        # Calculate number of samples for the given duration
+        duration_seconds = duration_ms / 1000.0
+        num_samples = int(duration_seconds * sample_rate)
+        
+        # Generate silent audio data (16-bit mono)
+        silent_data = b'\x00' * (num_samples * 2)  # 2 bytes per 16-bit sample
+        
+        with wave.open(file_path, 'wb') as wav_file:
+            wav_file.setnchannels(1)  # Mono
+            wav_file.setsampwidth(2)  # 16-bit
+            wav_file.setframerate(sample_rate)
+            wav_file.writeframes(silent_data)
+        
+        return True
+    except Exception as e:
+        print(f"Error generating Thai audio placeholder {file_path}: {e}")
+        return False
+
+
 async def get_room_audio_files(storage_path: str, room_id: str) -> list[dict]:
     """Get all audio files for a room with metadata"""
     room_path = os.path.join(storage_path, room_id)
@@ -1045,6 +1071,41 @@ async def get_current_participants(room_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/rooms/{room_id}/subtitles")
+async def get_room_subtitles(room_id: str):
+    """Get all subtitle segments for a room (for late joiners)"""
+    try:
+        from .db_service import AsyncDatabaseService
+        
+        # Get all subtitle segments for the room
+        subtitles = await AsyncDatabaseService.get_room_subtitle_segments(room_id)
+        
+        # Format as timeline data
+        timeline_data = []
+        for subtitle in subtitles:
+            timeline_data.append({
+                "segmentId": subtitle.segment_id,
+                "startMs": subtitle.timestamp_ms,
+                "endMs": subtitle.timestamp_ms + subtitle.duration_ms,
+                "text": subtitle.text_en or "",
+                "thai": subtitle.text_th or "",
+                "confidence": subtitle.confidence_en or 0.0,
+                "processingMs": subtitle.processing_time_ms or 0,
+                "isPartial": False,
+                "isFinal": subtitle.is_final
+            })
+        
+        return {
+            "room_id": room_id,
+            "subtitles": timeline_data,
+            "total_segments": len(timeline_data)
+        }
+        
+    except Exception as e:
+        get_logger().error(f"Error getting subtitles for {room_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/rooms/{room_id}/audio/files")
 async def get_room_audio_files_api(room_id: str):
     """Get list of audio files for a room"""
@@ -1144,6 +1205,7 @@ class ConnectionState:
     created_at: datetime = field(default_factory=datetime.utcnow)
     transcript_path: Path | None = None
     room_id: str | None = None
+    audio_segment_counter: int = 0
 
     def reset_partial(self) -> None:
         self.last_partial = ""
@@ -1302,7 +1364,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                 timestamp_ms=message.get("startMs", 0),
                                 duration_ms=(message.get("endMs", 0) -
                                              message.get("startMs", 0)),
-                                sequence_number=len(state.transcript.segments),
+                                sequence_number=len(
+                                    state.transcript._segments
+                                ),
                                 text_en=message.get("text", ""),
                                 text_th=message.get("thai", ""),
                                 confidence_en=message.get("confidence", 0.0),
@@ -1315,6 +1379,53 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                 ),
                                 is_final=True
                             )
+                            
+                            # Generate and save Thai audio placeholder
+                            if message.get("thai"):
+                                segment_id = state.audio_segment_counter
+                                thai_audio_file_path = os.path.join(
+                                    settings.audio_storage_path,
+                                    state.room_id,
+                                    f"{segment_id:06d}_th.wav"
+                                )
+                                
+                                # Estimate duration from English text
+                                english_text = message.get("english", "")
+                                # ~100ms per character
+                                estimated_duration_ms = len(english_text) * 100
+                                # Clamp to 0.5-10 seconds
+                                estimated_duration_ms = max(
+                                    500, min(10000, estimated_duration_ms)
+                                )
+                                
+                                # Generate placeholder Thai audio
+                                thai_audio_saved = await (
+                                    generate_thai_audio_placeholder(
+                                        thai_audio_file_path,
+                                        estimated_duration_ms,
+                                        state.sample_rate
+                                    )
+                                )
+                                
+                                if thai_audio_saved:
+                                    # Save Thai audio metadata to database
+                                    await (
+                                        AsyncDatabaseService.save_audio_segment(
+                                            room_id=state.room_id,
+                                            segment_id=f"{sess_id}-{segment_id}",
+                                            timestamp_ms=message.get(
+                                                "timestamp_ms", 0
+                                            ),
+                                            duration_ms=estimated_duration_ms,
+                                            sequence_number=segment_id,
+                                            audio_data=b"",
+                                            audio_language="th",
+                                            sample_rate=state.sample_rate,
+                                            channels=1,
+                                            format="wav",
+                                            file_path=thai_audio_file_path
+                                        )
+                                    )
                         except Exception as e:
                             get_logger().error(f"Failed to save subtitle: {e}")
                     
@@ -1395,8 +1506,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     # Ensure audio storage directory exists
                     await ensure_audio_directory(settings.audio_storage_path)
                     
-                    # Save audio chunk to file
-                    segment_id = int(timestamp / 1000)  # Use timestamp as segment
+                    # Increment segment counter for sequential IDs
+                    state.audio_segment_counter += 1
+                    segment_id = state.audio_segment_counter
+                    
+                    # Save English audio chunk to file
                     audio_file_path = get_audio_file_path(
                         settings.audio_storage_path,
                         state.room_id,
@@ -1412,7 +1526,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     # Save metadata to database with file path
                     await AsyncDatabaseService.save_audio_segment(
                         room_id=state.room_id,
-                        segment_id=f"{sess_id}-{timestamp}",
+                        segment_id=f"{sess_id}-{segment_id}",
                         timestamp_ms=timestamp,
                         duration_ms=(len(chunk) * 1000 //
                                      (state.sample_rate * 2)),
@@ -1730,51 +1844,4 @@ async def delete_room(room_id: str):
         raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
 
-# Add helper methods to DatabaseService
-async def get_room_audio_segments(room_id: str):
-    """Get all audio segments for a room"""
-    async with get_async_session() as session:
-        result = await session.execute(
-            select(AudioSegment).where(AudioSegment.room_id == room_id).order_by(AudioSegment.timestamp_ms)
-        )
-        return result.scalars().all()
-
-
-async def get_room_subtitle_segments(room_id: str):
-    """Get all subtitle segments for a room"""
-    async with get_async_session() as session:
-        result = await session.execute(
-            select(SubtitleSegment).where(SubtitleSegment.room_id == room_id).order_by(SubtitleSegment.timestamp_ms)
-        )
-        return result.scalars().all()
-
-
-async def get_room_session_history(room_id: str):
-    """Get all session history for a room"""
-    async with get_async_session() as session:
-        result = await session.execute(
-            select(SessionHistory).where(SessionHistory.room_id == room_id).order_by(SessionHistory.started_at)
-        )
-        return result.scalars().all()
-
-
-async def delete_room(room_id: str):
-    """Delete a room and all associated data"""
-    async with get_async_session() as session:
-        try:
-            # Delete room (cascading should handle related data)
-            result = await session.execute(
-                delete(SeminarRoom).where(SeminarRoom.room_id == room_id)
-            )
-            await session.commit()
-            return result.rowcount > 0
-        except Exception as e:
-            await session.rollback()
-            raise
-
-
-# Add these methods to AsyncDatabaseService class
-AsyncDatabaseService.get_room_audio_segments = staticmethod(get_room_audio_segments)
-AsyncDatabaseService.get_room_subtitle_segments = staticmethod(get_room_subtitle_segments)
-AsyncDatabaseService.get_room_session_history = staticmethod(get_room_session_history)
-AsyncDatabaseService.delete_room = staticmethod(delete_room)
+# Helper methods moved to AsyncDatabaseService for proper async handling

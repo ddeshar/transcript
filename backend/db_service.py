@@ -433,6 +433,22 @@ class AsyncDatabaseService:
         return await cls.execute_sync(_save_subtitle)
 
     @classmethod
+    async def get_room_subtitle_segments(
+        cls, room_id: str, is_visible: bool = True
+    ) -> List[SubtitleSegment]:
+        """Async get subtitle segments for a room."""
+        def _get_subtitles():
+            db = next(get_db())
+            try:
+                return DatabaseService.get_subtitle_segments(
+                    db, room_id, is_visible=is_visible
+                )
+            finally:
+                db.close()
+                
+        return await cls.execute_sync(_get_subtitles)
+
+    @classmethod
     async def update_presenter_session(
         cls, room_id: str, presenter_session_id: str
     ) -> SeminarRoom | None:

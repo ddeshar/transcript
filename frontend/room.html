@@ -1021,6 +1021,7 @@
 
       websocket.onopen = () => {
         console.log('Connected to room:', roomId);
+        loadHistoricalSubtitles();
       };
 
       websocket.onmessage = (event) => {
@@ -1061,6 +1062,30 @@
           // Load existing transcript when joining room
           loadExistingTranscript(data.transcript);
           break;
+      }
+    }
+
+    async function loadHistoricalSubtitles() {
+      try {
+        const response = await fetch(`/api/rooms/${roomId}/subtitles`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`Loading ${data.total_segments} historical subtitle segments`);
+          
+          // Load each subtitle segment into the transcript
+          data.subtitles.forEach(subtitle => {
+            addToTranscript({
+              timestamp_ms: subtitle.startMs,
+              thai: subtitle.thai,
+              english: subtitle.text,
+              type: 'final'
+            });
+          });
+          
+          console.log('Historical subtitles loaded successfully');
+        }
+      } catch (error) {
+        console.error('Failed to load historical subtitles:', error);
       }
     }
 
