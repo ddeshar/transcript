@@ -184,20 +184,16 @@
         }
 
         .settings-section {
-            background: var(--secondary-bg);
-            padding: 25px;
-            border-radius: 12px;
+            background: rgba(45, 45, 45, 0.95);
             border: 1px solid var(--border-color);
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .settings-section:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
-        }
-
-        .full-width-section {
+            border-radius: 12px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+            box-shadow: 
+                0 8px 32px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transition: opacity 0.3s ease, pointer-events 0.3s ease;
+        }        .full-width-section {
             grid-column: 1 / -1;
         }
 
@@ -214,6 +210,16 @@
             font-weight: 600;
             position: relative;
             padding-bottom: 12px;
+            transition: color 0.3s ease;
+        }
+
+        .settings-section.mt-not-needed {
+            background: rgba(45, 45, 45, 0.6);
+            border-color: rgba(85, 85, 85, 0.5);
+        }
+
+        .settings-section.mt-not-needed .section-title {
+            color: var(--text-secondary);
         }
 
         .section-title::after {
@@ -787,26 +793,29 @@
         const providerDescriptions = {
             // ASR Providers
             'mock': 'Mock provider for testing (returns dummy text)',
-            'vosk': 'Offline speech recognition using Vosk models',
-            'whispercpp': 'Local Whisper.cpp for offline speech recognition',
-            'faster_whisper': 'Fast local Whisper with optimized inference (~300ms, good accuracy)',
-            'whisper_local': 'Official OpenAI Whisper local (~1s, excellent accuracy)',
-            'whisper_api': 'OpenAI Whisper API (cloud, requires API key)',
+            'vosk': 'Offline speech recognition using Vosk models (Free)',
+            'whispercpp': 'Local Whisper.cpp for offline speech recognition (Free)',
+            'faster_whisper': 'Fast local Whisper with optimized inference (~300ms, good accuracy) (Free)',
+            'whisper_local': 'Official OpenAI Whisper local (~1s, excellent accuracy) (Free)',
+            'whisper_api': 'OpenAI Whisper API ($0.006/min - English only)',
             'whisper_gpt': 'Whisper API + GPT translation (slow but best Thai quality)',
+            'gpt_realtime': 'GPT-4o Real-time Audio ($0.06/min input, $0.24/min output - Live conversation)',
+            'gpt_4o_audio': 'GPT-4o Audio Preview ($0.15/1M input tokens, $0.60/1M output tokens - Audio I/O)',
             'hybrid': 'Fast English immediately + Quality Thai later (best UX!)',
             'openai': 'OpenAI Whisper API (cloud, requires API key)',
             
             // MT Providers
-            'marian': 'Helsinki-NLP Marian models for translation',
-            'opus': 'OPUS-MT models via Marian',
-            'ctranslate2': 'Fast CTranslate2 inference engine',
-            'ct2': 'Fast CTranslate2 inference engine',
-            'gtranslate': 'Google Cloud Translate API',
-            'google': 'Google Cloud Translate API',
-            'awstranslate': 'AWS Translate service',
-            'aws': 'AWS Translate service',
-            'simple_thai': 'Simple word-mapping Thai translation (fast but basic)',
-            'simple': 'Simple word-mapping Thai translation'
+            'marian': 'Helsinki-NLP Marian models for translation (Free, offline)',
+            'opus': 'OPUS-MT models via Marian (Free, offline)',
+            'ctranslate2': 'Fast CTranslate2 inference engine (Free, offline)',
+            'ct2': 'Fast CTranslate2 inference engine (Free, offline)',
+            'openai_gpt': 'OpenAI GPT models ($0.50/1M input tokens, $1.50/1M output tokens)',
+            'gtranslate': 'Google Cloud Translate API ($20/1M characters)',
+            'google': 'Google Cloud Translate API ($20/1M characters)',
+            'awstranslate': 'AWS Translate service ($15/1M characters)',
+            'aws': 'AWS Translate service ($15/1M characters)',
+            'simple_thai': 'Simple word-mapping Thai translation (Free, fast but basic)',
+            'simple': 'Simple word-mapping Thai translation (Free, fast but basic)'
         };
 
         async function loadSettings() {
@@ -841,7 +850,7 @@
                 }
                 
                 const data = await response.json();
-                currentEnvVars = data.variables;
+                currentEnvVars = data.env_vars || data.variables;
                 updateEnvironmentVarsDisplay();
                 
             } catch (error) {
@@ -1075,7 +1084,7 @@
         }
 
         function updateSettingsDisplay() {
-            const { current, available, models, languages, cloud_providers } = currentSettings;
+            const { current, available, models, languages, cloud_providers, dependencies } = currentSettings;
             
             // Update current status
             document.getElementById('current-asr').innerHTML = 
@@ -1095,6 +1104,9 @@
             // Update provider dropdowns
             updateProviderDropdown('asr-provider', available.asr_providers, current.asr_provider);
             updateProviderDropdown('mt-provider', available.mt_providers, current.mt_provider);
+
+            // Update MT section visibility based on current ASR provider
+            updateMTSectionVisibility(current.asr_provider, dependencies);
 
             // Update model status
             updateModelInfo('vosk', models.vosk);
@@ -1124,6 +1136,59 @@
                 }
                 select.appendChild(optionElement);
             });
+
+            // Add event listener for ASR provider changes to update MT visibility
+            if (selectId === 'asr-provider') {
+                select.addEventListener('change', function() {
+                    const { dependencies } = currentSettings;
+                    updateMTSectionVisibility(this.value, dependencies);
+                });
+            }
+        }
+
+        function updateMTSectionVisibility(asrProvider, dependencies) {
+            const mtSection = document.querySelector('.settings-section:nth-of-type(2)'); // MT section
+            const compatibility = dependencies?.asr_mt_compatibility?.[asrProvider];
+            
+            if (!compatibility) {
+                // If no compatibility info, show MT section by default
+                mtSection.classList.remove('mt-not-needed');
+                mtSection.style.opacity = '1';
+                mtSection.style.pointerEvents = 'auto';
+                const mtTitle = mtSection.querySelector('.section-title');
+                if (mtTitle) {
+                    mtTitle.innerHTML = '🌐 Translation (MT)';
+                }
+                return;
+            }
+
+            const requiresMT = compatibility.requires_mt;
+            
+            if (requiresMT) {
+                // Show MT section and update label to indicate it's required
+                mtSection.classList.remove('mt-not-needed');
+                mtSection.style.opacity = '1';
+                mtSection.style.pointerEvents = 'auto';
+                const mtTitle = mtSection.querySelector('.section-title');
+                if (mtTitle) {
+                    mtTitle.innerHTML = '🌐 Translation (MT) <span style="color: var(--accent-orange); font-size: 0.8em;">REQUIRED</span>';
+                }
+            } else {
+                // Mark MT section as not needed
+                mtSection.classList.add('mt-not-needed');
+                const mtTitle = mtSection.querySelector('.section-title');
+                if (mtTitle) {
+                    mtTitle.innerHTML = '🌐 Translation (MT) <span style="color: var(--text-secondary); font-size: 0.8em;">NOT NEEDED - Built-in Translation</span>';
+                }
+                // Add helpful explanation
+                const mtDescription = mtSection.querySelector('#mt-description');
+                if (mtDescription) {
+                    mtDescription.innerHTML = '<em style="color: var(--text-secondary);">This ASR provider includes built-in translation capabilities. No separate MT provider is required.</em>';
+                }
+                // Fade out the section instead of hiding completely
+                mtSection.style.opacity = '0.6';
+                mtSection.style.pointerEvents = 'none';
+            }
         }
 
         function updateModelInfo(modelType, modelData) {
@@ -1169,12 +1234,24 @@
             const asrProvider = document.getElementById('asr-provider').value;
             const mtProvider = document.getElementById('mt-provider').value;
             
+            // Check if MT is required for the selected ASR provider
+            const { dependencies } = currentSettings;
+            const compatibility = dependencies?.asr_mt_compatibility?.[asrProvider];
+            const requiresMT = compatibility ? compatibility.requires_mt : true;
+            
             const newSettings = {
                 variables: {
-                    ASR_PROVIDER: asrProvider,
-                    MT_PROVIDER: mtProvider
+                    ASR_PROVIDER: asrProvider
                 }
             };
+            
+            // Only include MT_PROVIDER if it's required
+            if (requiresMT) {
+                newSettings.variables.MT_PROVIDER = mtProvider;
+            } else {
+                // For providers that don't need MT, set to simple_thai as pass-through
+                newSettings.variables.MT_PROVIDER = compatibility?.recommended_mt || 'simple_thai';
+            }
 
             try {
                 document.getElementById('save-providers').disabled = true;

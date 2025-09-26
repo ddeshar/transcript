@@ -448,7 +448,8 @@ async def get_settings() -> JSONResponse:
     
     if os.environ.get("OPENAI_API_KEY"):
         available_asr_providers.extend(
-            ["whisper_api", "whisper_gpt", "hybrid"]
+            ["whisper_api", "whisper_gpt", "gpt_realtime",
+             "gpt_4o_audio", "hybrid"]
         )
     
     # Check for whisper.cpp model
@@ -534,7 +535,25 @@ async def get_settings() -> JSONResponse:
                     "requires_mt": True,
                     "recommended_mt": "openai_gpt",
                     "compatible_mt": ["openai_gpt", "awstranslate", "simple_thai"],
-                    "description": "OpenAI Whisper API (English only)"
+                    "description": "OpenAI Whisper API ($0.006/min - English only)"
+                },
+                "gpt_realtime": {
+                    "requires_mt": False,
+                    "recommended_mt": "simple_thai",
+                    "compatible_mt": ["simple_thai"],
+                    "description": (
+                        "GPT-4o Real-time Audio ($0.06/min input, "
+                        "$0.24/min output - Live conversation)"
+                    )
+                },
+                "gpt_4o_audio": {
+                    "requires_mt": False,
+                    "recommended_mt": "simple_thai",
+                    "compatible_mt": ["simple_thai"],
+                    "description": (
+                        "GPT-4o Audio Preview ($0.15/1M input tokens, "
+                        "$0.60/1M output tokens - Audio input/output model)"
+                    )
                 },
                 "vosk": {
                     "requires_mt": True,
@@ -572,9 +591,47 @@ async def get_settings() -> JSONResponse:
                     "description": "Testing provider"
                 }
             },
+            "mt_provider_info": {
+                "openai_gpt": {
+                    "description": (
+                        "OpenAI GPT models ($0.50/1M input tokens, "
+                        "$1.50/1M output tokens)"
+                    )
+                },
+                "marian": {
+                    "description": "Helsinki-NLP Marian models (Free, offline)"
+                },
+                "ctranslate2": {
+                    "description": (
+                        "Fast CTranslate2 inference engine (Free, offline)"
+                    )
+                },
+                "gtranslate": {
+                    "description": (
+                        "Google Cloud Translate API ($20/1M characters)"
+                    )
+                },
+                "awstranslate": {
+                    "description": "AWS Translate service ($15/1M characters)"
+                },
+                "simple_thai": {
+                    "description": (
+                        "Simple word-mapping Thai translation "
+                        "(Free, fast but basic)"
+                    )
+                },
+                "mock": {
+                    "description": "Mock translation provider for testing"
+                }
+            },
             "provider_categories": {
-                "cloud_asr": ["whisper_api", "whisper_gpt"],
-                "local_asr": ["vosk", "faster_whisper", "whisper_local", "whispercpp"],  
+                "cloud_asr": [
+                    "whisper_api", "whisper_gpt", "gpt_realtime",
+                    "gpt_4o_audio"
+                ],
+                "local_asr": [
+                    "vosk", "faster_whisper", "whisper_local", "whispercpp"
+                ],
                 "hybrid_asr": ["hybrid"],
                 "cloud_mt": ["openai_gpt", "awstranslate"],
                 "local_mt": ["marian", "ctranslate2"],
@@ -685,8 +742,49 @@ async def get_env_vars() -> JSONResponse:
         import os
         # Return current environment variables that are safe to display
         env_vars = {
+            # Core Providers
             "ASR_PROVIDER": os.getenv("ASR_PROVIDER", "vosk"),
             "MT_PROVIDER": os.getenv("MT_PROVIDER", "marian"),
+            
+            # Audio Settings
+            "AUDIO_SAMPLE_RATE": os.getenv("AUDIO_SAMPLE_RATE", "16000"),
+            "MIN_SILENCE_MS": os.getenv("MIN_SILENCE_MS", "500"),
+            "STATUS_INTERVAL_MS": os.getenv("STATUS_INTERVAL_MS", "100"),
+            
+            # OpenAI
+            "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
+            "OPENAI_WHISPER_MODEL": os.getenv("OPENAI_WHISPER_MODEL", "whisper-1"),
+            "OPENAI_GPT_MODEL": os.getenv("OPENAI_GPT_MODEL", "gpt-3.5-turbo"),
+            
+            # Faster-Whisper
+            "FASTER_WHISPER_MODEL": os.getenv("FASTER_WHISPER_MODEL", "small.en"),
+            "FASTER_WHISPER_DEVICE": os.getenv("FASTER_WHISPER_DEVICE", "cpu"),
+            "FASTER_WHISPER_COMPUTE_TYPE": os.getenv("FASTER_WHISPER_COMPUTE_TYPE", "int8"),
+            "FASTER_WHISPER_LANGUAGE": os.getenv("FASTER_WHISPER_LANGUAGE", ""),
+            "FASTER_WHISPER_BEAM_SIZE": os.getenv("FASTER_WHISPER_BEAM_SIZE", ""),
+            "FASTER_WHISPER_CHUNK_DURATION": os.getenv("FASTER_WHISPER_CHUNK_DURATION", ""),
+            
+            # Official Whisper
+            "WHISPER_MODEL_SIZE": os.getenv("WHISPER_MODEL_SIZE", ""),
+            "WHISPER_DEVICE": os.getenv("WHISPER_DEVICE", ""),
+            "WHISPER_CHUNK_DURATION": os.getenv("WHISPER_CHUNK_DURATION", ""),
+            
+            # Google Cloud
+            "GCP_PROJECT": os.getenv("GCP_PROJECT", ""),
+            "GOOGLE_APPLICATION_CREDENTIALS": os.getenv("GOOGLE_APPLICATION_CREDENTIALS", ""),
+            
+            # AWS
+            "AWS_REGION": os.getenv("AWS_REGION", ""),
+            "AWS_ACCESS_KEY_ID": os.getenv("AWS_ACCESS_KEY_ID", ""),
+            "AWS_SECRET_ACCESS_KEY": os.getenv("AWS_SECRET_ACCESS_KEY", ""),
+            
+            # HuggingFace
+            "HUGGINGFACE_TOKEN": os.getenv("HUGGINGFACE_TOKEN", ""),
+            
+            # Thai Translation
+            "THAI_POLITENESS_GENDER": os.getenv("THAI_POLITENESS_GENDER", "female"),
+            
+            # Admin/Auth (for backward compatibility)
             "JWT_ACCESS_TOKEN_EXPIRE_MINUTES": os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"),
             "ADMIN_USERNAME": os.getenv("ADMIN_USERNAME", "admin"),
             "ADMIN_EMAIL": os.getenv("ADMIN_EMAIL", "admin@example.com"),

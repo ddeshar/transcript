@@ -50,6 +50,14 @@ except ImportError:
     HybridASRProvider = None
 
 try:
+    from .asr_openai_realtime import GPTRealtimeProvider, GPT4oAudioProvider
+    OPENAI_REALTIME_AVAILABLE = True
+except ImportError:
+    OPENAI_REALTIME_AVAILABLE = False
+    GPTRealtimeProvider = None
+    GPT4oAudioProvider = None
+
+try:
     from .mt_marian import MarianMTProvider
     MARIAN_AVAILABLE = True
 except ImportError:
@@ -128,6 +136,14 @@ def create_asr_provider(
             model_size=model_size,
             device=device,
             chunk_duration=chunk_duration,
+        )
+    if name == "gpt_realtime":
+        return GPTRealtimeProvider(
+            api_key=settings.get("OPENAI_API_KEY"),
+        )
+    if name == "gpt_4o_audio":
+        return GPT4oAudioProvider(
+            api_key=settings.get("OPENAI_API_KEY"),
         )
     if name == "hybrid":
         # Create fast provider (faster-whisper)
