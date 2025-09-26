@@ -265,6 +265,8 @@
       transform: translateX(20px);
     }
 
+
+
     /* Subtitle Display Area */
     .subtitle-area {
       display: flex;
@@ -521,8 +523,6 @@
       .room-info {
         order: 1;
       }
-    }
-      gap: 12px;
     }
 
     .playback-info {
@@ -1212,11 +1212,11 @@
           </div>
         </div>
 
-        <!-- Audio Language -->
+        <!-- Audio Controls -->
         <div class="control-card">
           <h3 class="card-title">
             <i class="fas fa-volume-up"></i>
-            Audio Language
+            Audio Settings
           </h3>
           <div class="toggle-section">
             <div class="toggle-item">
@@ -1937,6 +1937,8 @@
           window.open(`/room-audio?room=${roomId}`, '_blank');
         });
       }
+
+
     }
 
     function connectWebSocket() {
@@ -1979,6 +1981,10 @@
           updateSubtitles(data);
           if (data.type === 'final') {
             addToTranscript(data);
+            // Trigger TTS for Thai text
+            if (ttsEnabled && data.thai_text) {
+              synthesizeSpeech(data.thai_text);
+            }
           }
           break;
         case 'status':
@@ -2076,6 +2082,8 @@
     }
 
     function handleWebSocketMessage(data) {
+      console.log('WebSocket message received:', data);
+      
       switch (data.type) {
         case 'partial':
           updateTranslationStatus('active');
@@ -2096,6 +2104,25 @@
             type: data.type
           });
           startLiveSession(); // Ensure live status is active
+          break;
+          
+        case 'room_status':
+          console.log('Room status update:', data);
+          if (data.is_live) {
+            startLiveSession();
+          } else {
+            stopLiveSession();
+          }
+          if (data.participant_count !== undefined) {
+            updateParticipantCount(data.participant_count);
+          }
+          break;
+          
+        case 'transcript':
+          console.log('Historical transcript received:', data);
+          if (data.transcript && data.transcript.segments) {
+            loadHistoricalTranscript(data.transcript.segments);
+          }
           break;
           
         case 'status':
@@ -2143,8 +2170,42 @@
         elements.offlineBadge.style.display = 'none';
       }
       
-      // Update status indicators
+      // Update connection status
       updateConnectionStatus('live');
+    }
+    
+    function stopLiveSession() {
+      isLive = false;
+      
+      // Update UI to show offline status
+      if (elements.liveBadge && elements.offlineBadge) {
+        elements.liveBadge.style.display = 'none';
+        elements.offlineBadge.style.display = 'flex';
+      }
+      
+      // Update connection status
+      updateConnectionStatus('offline');
+    }
+    
+    function loadHistoricalTranscript(segments) {
+      console.log('Loading historical transcript:', segments);
+      
+      // Clear existing history
+      if (elements.subtitleHistory) {
+        elements.subtitleHistory.innerHTML = '';
+      }
+      
+      // Add each segment to history
+      segments.forEach(segment => {
+        if (segment.thai || segment.english) {
+          addToSubtitleHistory({
+            thai: segment.thai,
+            english: segment.english,
+            timestamp_ms: segment.timestamp_ms,
+            type: 'historical'
+          });
+        }
+      });
     }
 
     function updateScrubberPosition(percentage) {
@@ -2211,11 +2272,13 @@
       if (elements.currentThai && data.thai) {
         elements.currentThai.textContent = data.thai;
         elements.currentThai.style.display = showThaiSubtitles ? 'block' : 'none';
+        console.log('Updated Thai subtitle:', data.thai, 'visible:', showThaiSubtitles);
       }
       
       if (elements.currentEnglish && data.english) {
         elements.currentEnglish.textContent = data.english;
         elements.currentEnglish.style.display = showEnglishSubtitles ? 'block' : 'none';
+        console.log('Updated English subtitle:', data.english, 'visible:', showEnglishSubtitles);
       }
     }
 
@@ -2359,7 +2422,11 @@
           });
         }
       }
-    }    // Start the application
+    }
+
+
+
+    // Start the application
     // Initialize when DOM is loaded
     document.addEventListener('DOMContentLoaded', initializePage);
   </script>

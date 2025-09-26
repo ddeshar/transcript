@@ -14,16 +14,30 @@ class MockASRStream(ASRStream):
         self._counter = 0
 
     async def push_audio(self, chunk: bytes, timestamp_ms: int) -> None:
-        # Mock transcription - just echo a counter
+        # Mock transcription with realistic test sentences
         self._counter += 1
-        if self._counter % 10 == 0:  # Every 10th chunk
+        
+        test_sentences = [
+            "Hello and welcome to today's presentation.",
+            "We'll be discussing artificial intelligence.",
+            "Machine learning is transforming industries.",
+            "Natural language processing enables computers to understand.",
+            "Deep learning uses neural networks for complex tasks.",
+            "Thank you for your attention to this topic.",
+            "Let's explore some practical applications.",
+            "The future of technology looks very promising."
+        ]
+        
+        if self._counter % 15 == 0:  # Every 15th chunk (~3-4 seconds)
+            sentence_index = (self._counter // 15 - 1) % len(test_sentences)
             result = ASRResult(
                 session_id=self.session_id,
-                text=f"Mock transcription {self._counter // 10}",
+                text=test_sentences[sentence_index],
                 is_final=True,
-                start_ms=timestamp_ms - 1000,
+                start_ms=timestamp_ms - 2000,
                 end_ms=timestamp_ms,
-                confidence=0.95
+                confidence=0.95,
+                segment_id=f"mock-{self._counter // 15}"
             )
             await self._queue.put(result)
 
@@ -47,5 +61,7 @@ class MockASRProvider(ASRProvider):
     async def setup(self) -> None:
         pass
 
-    async def create_stream(self, session_id: str, sample_rate: int) -> ASRStream:
+    async def create_stream(
+        self, session_id: str, sample_rate: int
+    ) -> ASRStream:
         return MockASRStream(session_id)

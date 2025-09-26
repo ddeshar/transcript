@@ -58,8 +58,20 @@ class Settings(BaseSettings):
     asr_provider: str = Field(default="mock", alias="ASR_PROVIDER")
     mt_provider: str = Field(default="mock", alias="MT_PROVIDER")
     tts_provider: str = Field(default="mock", alias="TTS_PROVIDER")
-    tts_voice: str = Field(default="alloy", alias="TTS_VOICE")
+    tts_voice: str = Field(default="nova", alias="TTS_VOICE")
     tts_speed: float = Field(default=1.0, alias="TTS_SPEED")
+    supported_languages: str = Field(
+        default="en,th", alias="SUPPORTED_LANGUAGES"
+    )
+    default_source_language: str = Field(
+        default="en", alias="DEFAULT_SOURCE_LANGUAGE"
+    )
+    default_target_language: str = Field(
+        default="th", alias="DEFAULT_TARGET_LANGUAGE"
+    )
+    sample_audio_files: str = Field(
+        default="en_sample.wav", alias="SAMPLE_AUDIO_FILES"
+    )
     cors_origins: str = Field(
         default="http://localhost:8000",
         alias="CORS_ORIGINS",
@@ -210,6 +222,15 @@ if FRONTEND_DIR.exists():
         "/static",
         StaticFiles(directory=str(FRONTEND_DIR)),
         name="static",
+    )
+
+# Mount sample audio directory
+SAMPLE_AUDIO_DIR = BASE_DIR / "sample_audio"
+if SAMPLE_AUDIO_DIR.exists():
+    app.mount(
+        "/static/sample_audio",
+        StaticFiles(directory=str(SAMPLE_AUDIO_DIR)),
+        name="sample_audio",
     )
 
 
@@ -668,9 +689,15 @@ async def get_settings() -> JSONResponse:
             },
         },
         "languages": {
-            "source": "en",  # Currently hardcoded to English
-            "target": "th",  # Currently hardcoded to Thai
-            "available_targets": ["th"],  # Could be expanded
+            "supported": settings.supported_languages.split(","),
+            "source": settings.default_source_language,
+            "target": settings.default_target_language,
+            "available_sources": ["en"],
+            "available_targets": ["th"],
+        },
+        "sample_audio": {
+            "available_files": settings.sample_audio_files.split(","),
+            "base_path": "/static/sample_audio/"
         },
         "cloud_providers": {
             "openai_configured": bool(os.environ.get("OPENAI_API_KEY")),
@@ -712,6 +739,71 @@ async def update_settings(new_settings: dict) -> JSONResponse:
         "restart_required": True,
     })
 
+
+class TranslateRequest(BaseModel):
+    text: str
+    source_language: str = "en"
+    target_language: str = "th"
+    politeness_gender: Optional[str] = None
+
+
+class TranslateResponse(BaseModel):
+    text: str
+    translated_text: str
+    source_language: str
+    target_language: str
+    politeness_gender: Optional[str] = None
+    provider: str
+
+
+@app.post("/api/translate", response_model=TranslateResponse)
+async def translate_text(request: TranslateRequest) -> TranslateResponse:
+    """Translate text using MT provider with Thai gender support."""
+    try:
+        # Set Thai politeness gender if provided
+        original_env = None
+        if request.politeness_gender:
+            original_env = os.environ.get("THAI_POLITENESS_GENDER")
+            os.environ["THAI_POLITENESS_GENDER"] = request.politeness_gender
+        
+        # Use the global MT provider
+        mt_provider = MT_PROVIDER
+        
+        # Perform translation
+        mt_result = await mt_provider.translate(
+            request.text,
+            is_final=True
+        )
+        
+        translated_text = mt_result.text
+        
+        # Restore original environment variable if it was changed
+        if original_env is not None:
+            os.environ["THAI_POLITENESS_GENDER"] = original_env
+        elif request.politeness_gender:
+            del os.environ["THAI_POLITENESS_GENDER"]
+        
+        return TranslateResponse(
+            text=request.text,
+            translated_text=translated_text,
+            source_language=request.source_language,
+            target_language=request.target_language,
+            politeness_gender=request.politeness_gender,
+            provider=MT_PROVIDER.name
+        )
+        
+    except Exception as e:
+        # Restore environment variable on error
+        if original_env is not None:
+            os.environ["THAI_POLITENESS_GENDER"] = original_env
+        elif (request.politeness_gender and 
+              "THAI_POLITENESS_GENDER" in os.environ):
+            del os.environ["THAI_POLITENESS_GENDER"]
+            
+        raise HTTPException(
+            status_code=500,
+            detail=f"Translation failed: {str(e)}"
+        )
 
     editable_vars = {
         "ASR_PROVIDER": os.environ.get("ASR_PROVIDER", ""),

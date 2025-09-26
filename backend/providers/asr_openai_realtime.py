@@ -41,7 +41,7 @@ class OpenAIRealtimeStream(ASRStream):
         self._lock = asyncio.Lock()
         
         # For GPT-4o Real-time, we'll use WebSocket connection
-        self._websocket: Optional[websockets.WebSocketServerProtocol] = None
+        self._websocket = None
         
     async def feed_audio(self, pcm_bytes: bytes) -> None:
         """Feed audio data to the model."""
@@ -140,10 +140,27 @@ class OpenAIRealtimeStream(ASRStream):
                 break
             yield result
     
+    async def push_audio(self, chunk: bytes, timestamp_ms: int) -> None:
+        """Push audio data for processing."""
+        await self.feed_audio(chunk)
+    
+    async def mark_segment_end(self) -> None:
+        """Mark the end of an audio segment."""
+        # For real-time processing, we can flush any remaining audio
+        async with self._lock:
+            if len(self._buffer) > 0:
+                chunk = bytes(self._buffer)
+                self._buffer.clear()
+                await self._process_audio_chunk(chunk)
+    
+    async def finalize(self) -> None:
+        """Finalize the stream and cleanup resources."""
+        await self.close()
+    
     async def close(self) -> None:
         """Close the stream and cleanup resources."""
         await self._queue.put(None)
-        if self._websocket:
+        if self._websocket and hasattr(self._websocket, 'close'):
             await self._websocket.close()
 
 

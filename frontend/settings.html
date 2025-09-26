@@ -607,6 +607,97 @@
             color: white;
             transform: scale(1.05);
         }
+
+        /* TTS-specific styles */
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 8px;
+        }
+
+        .speed-slider {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--border-color);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            cursor: pointer;
+        }
+
+        .speed-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            cursor: pointer;
+            border: 2px solid var(--secondary-bg);
+            box-shadow: 0 2px 6px rgba(0, 122, 204, 0.4);
+        }
+
+        .speed-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            cursor: pointer;
+            border: 2px solid var(--secondary-bg);
+            box-shadow: 0 2px 6px rgba(0, 122, 204, 0.4);
+        }
+
+        .speed-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--accent-blue);
+            min-width: 45px;
+            text-align: center;
+            background: var(--tertiary-bg);
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+
+        #test-tts-btn {
+            background: linear-gradient(135deg, var(--accent-green), #45a049);
+            border: none;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        #test-tts-btn:hover {
+            background: linear-gradient(135deg, #45a049, var(--accent-green));
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+        }
+
+        #test-tts-btn:disabled {
+            background: var(--tertiary-bg);
+            color: var(--text-secondary);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .voice-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 5px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .voice-badge {
+            background: var(--accent-blue);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
@@ -681,6 +772,103 @@
                         <option value="">Loading...</option>
                     </select>
                     <div class="provider-description" id="mt-description"></div>
+                </div>
+            </div>
+
+            <!-- Text-to-Speech Settings -->
+            <div class="settings-section">
+                <h2 class="section-title">🗣️ Text-to-Speech (TTS)</h2>
+                
+                <div class="setting-group">
+                    <div class="current-status">
+                        <span class="setting-label">Currently Active</span>
+                        <div class="setting-value" id="current-tts">
+                            <span class="current-provider" id="tts-active">Loading...</span>
+                            <span class="status-indicator status-online" id="tts-status">ACTIVE</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label" for="tts-provider">🔄 Change Provider</label>
+                    <select class="setting-select" id="tts-provider">
+                        <option value="">Loading...</option>
+                    </select>
+                    <div class="provider-description" id="tts-description"></div>
+                </div>
+
+                <!-- Voice Selection (Provider-specific) -->
+                <div class="setting-group" id="voice-selection-group" style="display: none;">
+                    <label class="setting-label" for="tts-voice">🎵 Voice Selection</label>
+                    <select class="setting-select" id="tts-voice">
+                        <option value="">Select a voice...</option>
+                    </select>
+                    <div class="provider-description" id="voice-description">Choose a voice for text-to-speech synthesis</div>
+                </div>
+
+                <!-- TTS Settings -->
+                <div class="setting-group" id="tts-settings-group" style="display: none;">
+                    <label class="setting-label" for="tts-speed">⚡ Speech Speed</label>
+                    <div class="speed-control">
+                        <input type="range" id="tts-speed" class="speed-slider" min="0.5" max="2.0" step="0.1" value="1.0">
+                        <span class="speed-value" id="tts-speed-value">1.0x</span>
+                    </div>
+                    <div class="provider-description">Adjust speech playback speed (0.5x - 2.0x)</div>
+                </div>
+
+                <!-- Sample Audio Test -->
+                <div class="setting-group" id="tts-test-group" style="display: none;">
+                    <label class="setting-label">🎧 Voice Preview</label>
+                    <div class="setting-value">
+                        <button class="secondary-button" id="test-tts-btn">
+                            <span class="icon">▶️</span>
+                            <span>Test Voice</span>
+                        </button>
+                        <button class="secondary-button" id="download-voices-btn" style="margin-left: 10px;">
+                            <span class="icon">💾</span>
+                            <span>Cache Voices</span>
+                        </button>
+                    </div>
+                    <div class="provider-description">Test the selected voice with sample Thai text or download voices for offline use</div>
+                </div>
+            </div>
+
+            <!-- Thai Language Settings -->
+            <div class="settings-section">
+                <h2 class="section-title">🇹🇭 Thai Language Settings</h2>
+                
+                <div class="setting-group">
+                    <div class="current-status">
+                        <span class="setting-label">Currently Active</span>
+                        <div class="setting-value" id="current-thai-gender">
+                            <span class="current-provider" id="thai-gender-active">Loading...</span>
+                            <span class="status-indicator status-online" id="thai-gender-status">ACTIVE</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label" for="thai-politeness-gender">👥 Politeness Gender</label>
+                    <select class="setting-select" id="thai-politeness-gender">
+                        <option value="female">Female (ค่ะ/คะ)</option>
+                        <option value="male">Male (ครับ)</option>
+                        <option value="neutral">Neutral (minimal particles)</option>
+                    </select>
+                    <div class="provider-description" id="thai-gender-description">
+                        Controls the politeness particles used in Thai translations (affects formality and gender expression)
+                    </div>
+                </div>
+
+                <!-- Thai Preview -->
+                <div class="setting-group">
+                    <label class="setting-label">🎯 Translation Preview</label>
+                    <div class="setting-value">
+                        <button class="secondary-button" id="test-thai-btn">
+                            <span class="icon">🔄</span>
+                            <span>Test Translation</span>
+                        </button>
+                    </div>
+                    <div class="provider-description">Test how politeness gender affects Thai translation output</div>
                 </div>
             </div>
 
@@ -815,7 +1003,52 @@
             'awstranslate': 'AWS Translate service ($15/1M characters)',
             'aws': 'AWS Translate service ($15/1M characters)',
             'simple_thai': 'Simple word-mapping Thai translation (Free, fast but basic)',
-            'simple': 'Simple word-mapping Thai translation (Free, fast but basic)'
+            'simple': 'Simple word-mapping Thai translation (Free, fast but basic)',
+            
+            // TTS Providers
+            'openai': 'OpenAI Text-to-Speech API (6 high-quality voices, $15/1M characters)',
+            'aws': 'AWS Polly Text-to-Speech (Natural/Neural voices, $4-16/1M characters)',
+            'google': 'Google Cloud Text-to-Speech (Standard/WaveNet/Neural2 voices, $4-16/1M characters)',
+            'azure': 'Microsoft Azure Cognitive Services Speech (Standard/Neural voices, $4-16/1M characters)',
+            'elevenlabs': 'ElevenLabs AI Voice Generation (Premium voices, $22/1M characters)',
+            'disabled': 'Text-to-Speech disabled (No audio synthesis)'
+        };
+
+        // Provider-specific voice options
+        const voiceOptions = {
+            'openai': [
+                { value: 'alloy', name: 'Alloy', description: 'Neutral, versatile voice' },
+                { value: 'echo', name: 'Echo', description: 'Male voice, clear delivery' },
+                { value: 'fable', name: 'Fable', description: 'Female voice, expressive' },
+                { value: 'onyx', name: 'Onyx', description: 'Male voice, deep tone' },
+                { value: 'nova', name: 'Nova', description: 'Female voice, energetic' },
+                { value: 'shimmer', name: 'Shimmer', description: 'Female voice, gentle' }
+            ],
+            'aws': [
+                { value: 'Joanna', name: 'Joanna', description: 'Female, US English, Neural' },
+                { value: 'Matthew', name: 'Matthew', description: 'Male, US English, Neural' },
+                { value: 'Amy', name: 'Amy', description: 'Female, British English, Neural' },
+                { value: 'Brian', name: 'Brian', description: 'Male, British English, Neural' },
+                { value: 'Emma', name: 'Emma', description: 'Female, British English, Neural' }
+            ],
+            'google': [
+                { value: 'en-US-Wavenet-A', name: 'US Female A', description: 'WaveNet, high quality' },
+                { value: 'en-US-Wavenet-B', name: 'US Male B', description: 'WaveNet, high quality' },
+                { value: 'en-US-Neural2-A', name: 'US Neural2 A', description: 'Neural2, premium quality' },
+                { value: 'en-US-Neural2-C', name: 'US Neural2 C', description: 'Neural2, premium quality' }
+            ],
+            'azure': [
+                { value: 'en-US-AriaNeural', name: 'Aria', description: 'Female, conversational' },
+                { value: 'en-US-DavisNeural', name: 'Davis', description: 'Male, conversational' },
+                { value: 'en-US-GuyNeural', name: 'Guy', description: 'Male, news style' },
+                { value: 'en-US-JennyNeural', name: 'Jenny', description: 'Female, assistant style' }
+            ],
+            'elevenlabs': [
+                { value: 'rachel', name: 'Rachel', description: 'American Female, calm' },
+                { value: 'drew', name: 'Drew', description: 'American Male, well-rounded' },
+                { value: 'clyde', name: 'Clyde', description: 'American Male, war veteran' },
+                { value: 'paul', name: 'Paul', description: 'American Male, middle-aged' }
+            ]
         };
 
         async function loadSettings() {
@@ -1104,9 +1337,16 @@
             // Update provider dropdowns
             updateProviderDropdown('asr-provider', available.asr_providers, current.asr_provider);
             updateProviderDropdown('mt-provider', available.mt_providers, current.mt_provider);
+            updateTTSProviderDropdown(available.tts_providers || ['openai', 'aws', 'google', 'azure', 'elevenlabs', 'disabled'], current.tts_provider || 'disabled');
 
             // Update MT section visibility based on current ASR provider
             updateMTSectionVisibility(current.asr_provider, dependencies);
+
+            // Update TTS settings
+            updateTTSDisplay(current.tts_provider || 'disabled');
+
+            // Update Thai politeness gender settings
+            updateThaiGenderDisplay(current.thai_politeness_gender || 'female');
 
             // Update model status
             updateModelInfo('vosk', models.vosk);
@@ -1121,6 +1361,7 @@
             // Update provider descriptions
             updateProviderDescription('asr-provider', 'asr-description');
             updateProviderDescription('mt-provider', 'mt-description');
+            updateProviderDescription('tts-provider', 'tts-description');
         }
 
         function updateProviderDropdown(selectId, options, currentValue) {
@@ -1233,6 +1474,10 @@
         async function saveProviders() {
             const asrProvider = document.getElementById('asr-provider').value;
             const mtProvider = document.getElementById('mt-provider').value;
+            const ttsProvider = document.getElementById('tts-provider').value;
+            const ttsVoice = document.getElementById('tts-voice').value;
+            const ttsSpeed = document.getElementById('tts-speed').value;
+            const thaiGender = document.getElementById('thai-politeness-gender').value;
             
             // Check if MT is required for the selected ASR provider
             const { dependencies } = currentSettings;
@@ -1241,7 +1486,9 @@
             
             const newSettings = {
                 variables: {
-                    ASR_PROVIDER: asrProvider
+                    ASR_PROVIDER: asrProvider,
+                    TTS_PROVIDER: ttsProvider || 'disabled',
+                    THAI_POLITENESS_GENDER: thaiGender || 'female'
                 }
             };
             
@@ -1251,6 +1498,16 @@
             } else {
                 // For providers that don't need MT, set to simple_thai as pass-through
                 newSettings.variables.MT_PROVIDER = compatibility?.recommended_mt || 'simple_thai';
+            }
+
+            // Add TTS-specific settings if TTS is enabled
+            if (ttsProvider && ttsProvider !== 'disabled') {
+                if (ttsVoice) {
+                    newSettings.variables.TTS_VOICE = ttsVoice;
+                }
+                if (ttsSpeed) {
+                    newSettings.variables.TTS_SPEED = parseFloat(ttsSpeed).toString();
+                }
             }
 
             try {
@@ -1304,8 +1561,389 @@
             }, 4000);
         }
 
+        // TTS-specific functions
+        function updateTTSProviderDropdown(providers, currentProvider) {
+            const select = document.getElementById('tts-provider');
+            select.innerHTML = '';
+            
+            providers.forEach(provider => {
+                const option = document.createElement('option');
+                option.value = provider;
+                option.textContent = provider;
+                if (provider === currentProvider) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+            
+            // Add change event listener
+            select.addEventListener('change', function() {
+                updateTTSDisplay(this.value);
+            });
+        }
+
+        function updateTTSDisplay(provider) {
+            // Update current TTS status
+            document.getElementById('tts-active').textContent = provider || 'disabled';
+            document.getElementById('tts-status').className = provider && provider !== 'disabled' ? 
+                'status-indicator status-online' : 'status-indicator status-offline';
+            document.getElementById('tts-status').textContent = provider && provider !== 'disabled' ? 
+                'ACTIVE' : 'DISABLED';
+            
+            // Show/hide TTS settings based on provider
+            const voiceGroup = document.getElementById('voice-selection-group');
+            const settingsGroup = document.getElementById('tts-settings-group');
+            const testGroup = document.getElementById('tts-test-group');
+            
+            if (provider && provider !== 'disabled') {
+                voiceGroup.style.display = 'block';
+                settingsGroup.style.display = 'block';
+                testGroup.style.display = 'block';
+                
+                updateVoiceOptions(provider);
+            } else {
+                voiceGroup.style.display = 'none';
+                settingsGroup.style.display = 'none';
+                testGroup.style.display = 'none';
+            }
+        }
+
+        function updateVoiceOptions(provider) {
+            const voiceSelect = document.getElementById('tts-voice');
+            const voiceDescription = document.getElementById('voice-description');
+            
+            voiceSelect.innerHTML = '<option value="">Select a voice...</option>';
+            
+            if (voiceOptions[provider]) {
+                voiceOptions[provider].forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.value;
+                    option.textContent = `${voice.name} - ${voice.description}`;
+                    voiceSelect.appendChild(option);
+                });
+                
+                // Set default voice (first option)
+                if (voiceOptions[provider].length > 0) {
+                    voiceSelect.value = voiceOptions[provider][0].value;
+                }
+                
+                voiceDescription.innerHTML = `Available voices for ${provider}: ${voiceOptions[provider].length} options`;
+            } else {
+                voiceDescription.textContent = 'Voice selection will be available once provider is configured';
+            }
+        }
+
+        // Initialize TTS controls
+        function initializeTTSControls() {
+            // Speed slider
+            const speedSlider = document.getElementById('tts-speed');
+            const speedValue = document.getElementById('tts-speed-value');
+            
+            if (speedSlider && speedValue) {
+                speedSlider.addEventListener('input', function() {
+                    speedValue.textContent = parseFloat(this.value).toFixed(1) + 'x';
+                });
+            }
+            
+            // Test TTS button
+            const testBtn = document.getElementById('test-tts-btn');
+            if (testBtn) {
+                testBtn.addEventListener('click', async function() {
+                    await testTTSVoice();
+                });
+            }
+        }
+
+        async function testTTSVoice() {
+            const provider = document.getElementById('tts-provider').value;
+            const voice = document.getElementById('tts-voice').value;
+            const speed = document.getElementById('tts-speed').value;
+            const testBtn = document.getElementById('test-tts-btn');
+            
+            if (!provider || provider === 'disabled' || !voice) {
+                showNotification('Please select a TTS provider and voice first', 'error');
+                return;
+            }
+            
+            testBtn.disabled = true;
+            testBtn.innerHTML = '<span class="icon">⏳</span><span>Testing...</span>';
+            
+            try {
+                const sampleText = "สวัสดีครับ ยินดีต้อนรับสู่ระบบบรรยายสดภาษาไทย";
+                
+                const response = await fetch('/api/tts/synthesize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: sampleText,
+                        voice_id: voice,
+                        speed: parseFloat(speed),
+                        provider: provider
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`TTS test failed: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                if (data.status === 'success' && data.audio_data) {
+                    // Play the audio
+                    const audioBlob = base64ToBlob(data.audio_data, 'audio/mpeg');
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    const audio = new Audio(audioUrl);
+                    
+                    audio.onended = () => URL.revokeObjectURL(audioUrl);
+                    await audio.play();
+                    
+                    showNotification('TTS test successful!', 'success');
+                } else {
+                    throw new Error('Invalid TTS response');
+                }
+            } catch (error) {
+                console.error('TTS test error:', error);
+                showNotification(`TTS test failed: ${error.message}`, 'error');
+            } finally {
+                testBtn.disabled = false;
+                testBtn.innerHTML = '<span class="icon">▶️</span><span>Test Voice</span>';
+            }
+        }
+
+        function base64ToBlob(base64, mimeType) {
+            const byteCharacters = atob(base64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            return new Blob([byteArray], { type: mimeType });
+        }
+
+        // Thai politeness gender functions
+        function updateThaiGenderDisplay(genderSetting) {
+            // Update current Thai gender status
+            document.getElementById('thai-gender-active').textContent = genderSetting;
+            document.getElementById('thai-gender-status').className = 'status-indicator status-online';
+            document.getElementById('thai-gender-status').textContent = 'ACTIVE';
+            
+            // Set the selected option in dropdown
+            const genderSelect = document.getElementById('thai-politeness-gender');
+            if (genderSelect) {
+                genderSelect.value = genderSetting;
+            }
+        }
+
+        function initializeThaiControls() {
+            // Test Thai translation button
+            const testThaiBtn = document.getElementById('test-thai-btn');
+            if (testThaiBtn) {
+                testThaiBtn.addEventListener('click', async function() {
+                    await testThaiTranslation();
+                });
+            }
+        }
+
+        async function testThaiTranslation() {
+            const gender = document.getElementById('thai-politeness-gender').value;
+            const testBtn = document.getElementById('test-thai-btn');
+            
+            testBtn.disabled = true;
+            testBtn.innerHTML = '<span class="icon">⏳</span><span>Testing...</span>';
+            
+            try {
+                const sampleTexts = {
+                    'female': 'Hello, welcome to the live seminar',
+                    'male': 'Thank you for joining us today',
+                    'neutral': 'Please take your seat and we will begin'
+                };
+                
+                const testText = sampleTexts[gender] || sampleTexts['female'];
+                
+                const response = await fetch('/api/translate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: testText,
+                        source_language: 'en',
+                        target_language: 'th',
+                        politeness_gender: gender
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Translation test failed: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                if (data.translated_text) {
+                    showNotification(`Thai (${gender}): ${data.translated_text}`, 'success');
+                } else {
+                    throw new Error('Invalid translation response');
+                }
+            } catch (error) {
+                console.error('Thai translation test error:', error);
+                showNotification(`Translation test failed: ${error.message}`, 'error');
+            } finally {
+                testBtn.disabled = false;
+                testBtn.innerHTML = '<span class="icon">🔄</span><span>Test Translation</span>';
+            }
+        }
+
+        // Enhanced voice preview with different sample texts per voice
+        const voiceSampleTexts = {
+            'openai': {
+                'alloy': 'สวัสดีค่ะ ยินดีต้อนรับสู่การบรรยายสด',
+                'echo': 'สวัสดีครับ ผมยินดีที่ได้พบทุกท่าน',
+                'fable': 'สวัสดีค่ะ หวังว่าทุกคนจะพร้อมสำหรับการเรียนรู้',
+                'onyx': 'สวัสดีครับ วันนี้เราจะพูดคุยเรื่องที่น่าสนใจ',
+                'nova': 'สวัสดีค่ะ เรามาเริ่มกันเลยนะคะ',
+                'shimmer': 'สวัสดีค่ะ ขอบคุณที่มาร่วมงานกับเรา'
+            },
+            'aws': {
+                'Joanna': 'สวัสดีค่ะ ยินดีต้อนรับทุกท่าน',
+                'Matthew': 'สวัสดีครับ ผมคือวิทยากรของวันนี้',
+                'Amy': 'สวัสดีค่ะ ฉันหวังว่าทุกคนจะสนุกกับการเรียน',
+                'Brian': 'สวัสดีครับ เรามาเริ่มการนำเสนอกัน',
+                'Emma': 'สวัสดีค่ะ วันนี้จะเป็นวันที่ดี'
+            }
+        };
+
+        async function testTTSVoice() {
+            const provider = document.getElementById('tts-provider').value;
+            const voice = document.getElementById('tts-voice').value;
+            const speed = document.getElementById('tts-speed').value;
+            const testBtn = document.getElementById('test-tts-btn');
+            
+            if (!provider || provider === 'disabled' || !voice) {
+                showNotification('Please select a TTS provider and voice first', 'error');
+                return;
+            }
+            
+            testBtn.disabled = true;
+            testBtn.innerHTML = '<span class="icon">⏳</span><span>Testing...</span>';
+            
+            try {
+                // Use voice-specific sample text if available
+                let sampleText = "สวัสดีครับ ยินดีต้อนรับสู่ระบบบรรยายสดภาษาไทย";
+                if (voiceSampleTexts[provider] && voiceSampleTexts[provider][voice]) {
+                    sampleText = voiceSampleTexts[provider][voice];
+                }
+                
+                const response = await fetch('/api/tts/synthesize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: sampleText,
+                        voice_id: voice,
+                        speed: parseFloat(speed),
+                        provider: provider
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`TTS test failed: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                if (data.status === 'success' && data.audio_data) {
+                    // Play the audio
+                    const audioBlob = base64ToBlob(data.audio_data, 'audio/mpeg');
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    const audio = new Audio(audioUrl);
+                    
+                    audio.onended = () => URL.revokeObjectURL(audioUrl);
+                    await audio.play();
+                    
+                    showNotification(`🎵 Playing ${voice} voice sample`, 'success');
+                } else {
+                    throw new Error('Invalid TTS response');
+                }
+            } catch (error) {
+                console.error('TTS test error:', error);
+                showNotification(`TTS test failed: ${error.message}`, 'error');
+            } finally {
+                testBtn.disabled = false;
+                testBtn.innerHTML = '<span class="icon">▶️</span><span>Test Voice</span>';
+            }
+        }
+
+        // Voice caching functionality
+        async function downloadVoicesForCaching() {
+            const provider = document.getElementById('tts-provider').value;
+            const downloadBtn = document.getElementById('download-voices-btn');
+            
+            if (!provider || provider === 'disabled') {
+                showNotification('Please select a TTS provider first', 'error');
+                return;
+            }
+            
+            downloadBtn.disabled = true;
+            downloadBtn.innerHTML = '<span class="icon">⏳</span><span>Caching...</span>';
+            
+            try {
+                const voices = voiceOptions[provider] || [];
+                const sampleTexts = voiceSampleTexts[provider] || {};
+                const baseText = "สวัสดีครับ ยินดีต้อนรับสู่ระบบบรรยายสดภาษาไทย";
+                
+                let cachedCount = 0;
+                
+                for (const voice of voices) {
+                    try {
+                        const sampleText = sampleTexts[voice.value] || baseText;
+                        
+                        const response = await fetch('/api/tts/cache-voice', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                provider: provider,
+                                voice_id: voice.value,
+                                sample_text: sampleText
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            cachedCount++;
+                            showNotification(`Cached ${voice.name} (${cachedCount}/${voices.length})`, 'info');
+                        }
+                    } catch (voiceError) {
+                        console.warn(`Failed to cache voice ${voice.value}:`, voiceError);
+                    }
+                }
+                
+                showNotification(`✅ Cached ${cachedCount} voices for ${provider}`, 'success');
+                
+            } catch (error) {
+                console.error('Voice caching error:', error);
+                showNotification(`Voice caching failed: ${error.message}`, 'error');
+            } finally {
+                downloadBtn.disabled = false;
+                downloadBtn.innerHTML = '<span class="icon">💾</span><span>Cache Voices</span>';
+            }
+        }
+
+        // Initialize cache download button
+        function initializeCacheButton() {
+            const downloadBtn = document.getElementById('download-voices-btn');
+            if (downloadBtn) {
+                downloadBtn.addEventListener('click', downloadVoicesForCaching);
+            }
+        }
+
         // Load settings on page load
-        document.addEventListener('DOMContentLoaded', loadSettings);
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSettings();
+            initializeTTSControls();
+            initializeThaiControls();
+            initializeCacheButton();
+        });
     </script>
     </main>
 

@@ -618,6 +618,8 @@
         align-items: center;
       }
     }
+
+
   </style>
 </head>
 <body>
@@ -709,6 +711,22 @@
           </div>
         </div>
 
+        <!-- Recording Interface -->
+        <div class="recording-interface" id="recordingInterface">
+          <div class="control-card">
+            <h3 class="card-title">
+              <i class="fas fa-record-vinyl"></i>
+              Recording Session
+            </h3>
+            <div class="recording-status">
+              <div class="status-badge status-live">
+                <div class="status-dot recording"></div>
+                Session Active
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Audio Status -->
         <div class="control-card">
           <h3 class="card-title">
@@ -752,6 +770,8 @@
             </div>
           </div>
         </div>
+
+
       </aside>
 
       <!-- Current Subtitles Display -->
@@ -937,8 +957,18 @@
         
         startLiveInterface();
         
-        elements.startBtn.disabled = true;
-        elements.stopBtn.disabled = false;
+        // Hide start button and show stop button
+        if (elements.startBtn) {
+          elements.startBtn.style.display = 'none';
+          elements.startBtn.disabled = true;
+        }
+        if (elements.stopBtn) {
+          elements.stopBtn.style.display = 'inline-flex';
+          elements.stopBtn.disabled = false;
+        }
+        if (elements.recordingIndicator) {
+          elements.recordingIndicator.style.display = 'flex';
+        }
         
         updateStatus('Live Session Active', 'status-listening');
         
@@ -985,9 +1015,24 @@
         // Update room status
         await updateRoomStatus(false);
         
+        // Reset live state
+        isLive = false;
+        startTime = null;
+        
         elements.recordingInterface.classList.remove('active');
-        elements.startBtn.disabled = false;
-        elements.stopBtn.disabled = true;
+        
+        // Show start button and hide stop button
+        if (elements.startBtn) {
+          elements.startBtn.style.display = 'inline-flex';
+          elements.startBtn.disabled = false;
+        }
+        if (elements.stopBtn) {
+          elements.stopBtn.style.display = 'none';
+          elements.stopBtn.disabled = true;
+        }
+        if (elements.recordingIndicator) {
+          elements.recordingIndicator.style.display = 'none';
+        }
         
         updateStatus('Session Ended', 'status-idle');
         
@@ -1001,6 +1046,18 @@
       isLive = true;
       startTime = Date.now();
       elements.recordingInterface.classList.add('active');
+      
+      // Show stop button and hide start button
+      if (elements.startBtn) {
+        elements.startBtn.style.display = 'none';
+      }
+      if (elements.stopBtn) {
+        elements.stopBtn.style.display = 'inline-flex';
+        elements.stopBtn.disabled = false;
+      }
+      if (elements.recordingIndicator) {
+        elements.recordingIndicator.style.display = 'flex';
+      }
       
       // Start duration counter
       setInterval(() => {
@@ -1255,8 +1312,136 @@
       setInterval(checkMicrophoneAccess, 10000);
     }
 
+    // TTS Functions
+    function initializeTTS() {
+      const ttsToggle = document.getElementById('presenterTtsToggle');
+      const ttsSettings = document.getElementById('presenterTtsSettings');
+      const voiceSelect = document.getElementById('presenterVoiceSelect');
+      const speedSlider = document.getElementById('presenterSpeedSlider');
+      const speedValue = document.getElementById('presenterSpeedValue');
+      const sampleBtn = document.getElementById('presenterSampleBtn');
+
+      // Toggle TTS settings visibility
+      if (ttsToggle && ttsSettings) {
+        ttsToggle.addEventListener('change', function() {
+          if (this.checked) {
+            ttsSettings.classList.add('active');
+          } else {
+            ttsSettings.classList.remove('active');
+          }
+        });
+      }
+
+      // Speed slider updates
+      if (speedSlider && speedValue) {
+        speedSlider.addEventListener('input', function() {
+          speedValue.textContent = this.value + 'x';
+        });
+      }
+
+      // Sample audio button
+      if (sampleBtn) {
+        sampleBtn.addEventListener('click', playPresenterSampleAudio);
+      }
+
+      // Populate voice options
+      if (voiceSelect) {
+        const voices = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+        voices.forEach(voice => {
+          const option = document.createElement('option');
+          option.value = voice;
+          option.textContent = voice.charAt(0).toUpperCase() + voice.slice(1);
+          voiceSelect.appendChild(option);
+        });
+      }
+    }
+
+    async function playPresenterSampleAudio() {
+      const voiceSelect = document.getElementById('presenterVoiceSelect');
+      const speedSlider = document.getElementById('presenterSpeedSlider');
+      const sampleBtn = document.getElementById('presenterSampleBtn');
+
+      if (!voiceSelect || !speedSlider || !sampleBtn) return;
+
+      const selectedVoice = voiceSelect.value;
+      const selectedSpeed = parseFloat(speedSlider.value);
+
+      try {
+        sampleBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Playing...';
+        sampleBtn.disabled = true;
+
+        // Try to get sample audio file first
+        try {
+          const sampleResponse = await fetch('/static/sample_audio/en_sample.wav');
+          if (sampleResponse.ok) {
+            const audioBlob = await sampleResponse.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(audioUrl);
+            audio.playbackRate = selectedSpeed;
+            await audio.play();
+            
+            audio.onended = () => {
+              URL.revokeObjectURL(audioUrl);
+              sampleBtn.innerHTML = '<i class="fas fa-play"></i> Test Voice';
+              sampleBtn.disabled = false;
+            };
+            return;
+          }
+        } catch (error) {
+          console.log('Sample audio file not found, using TTS');
+        }
+
+        // Fallback to TTS synthesis
+        const response = await fetch('/api/tts/synthesize', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            text: 'Hello, this is a test of the text-to-speech system.',
+            voice: selectedVoice,
+            speed: selectedSpeed
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to synthesize speech');
+        }
+
+        const data = await response.json();
+        const audioBlob = base64ToBlob(data.audio, 'audio/mp3');
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        
+        await audio.play();
+        
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          sampleBtn.innerHTML = '<i class="fas fa-play"></i> Test Voice';
+          sampleBtn.disabled = false;
+        };
+
+      } catch (error) {
+        console.error('Error playing sample audio:', error);
+        sampleBtn.innerHTML = '<i class="fas fa-play"></i> Test Voice';
+        sampleBtn.disabled = false;
+        alert('Error playing sample audio. Please try again.');
+      }
+    }
+
+    function base64ToBlob(base64, mimeType) {
+      const byteCharacters = atob(base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      return new Blob([byteArray], { type: mimeType });
+    }
+
     // Start the application
     init();
+    initializeTTS();
   </script>
 </body>
 </html>
