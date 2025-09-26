@@ -63,21 +63,44 @@
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     }
 
-    .presenter-title {
+    .header-top {
       text-align: center;
-      font-size: 2.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .presenter-title {
+      font-size: 2.2rem;
       font-weight: 700;
       background: var(--primary-gradient);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
-      margin-bottom: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .room-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin: 0 0 0.5rem 0;
+      opacity: 0.8;
+    }
+
+    .room-description {
+      font-size: 1rem;
+      color: var(--text-muted);
+      margin: 0;
+      opacity: 0.7;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.4;
     }
 
     .room-info-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 1.5rem;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
       margin-bottom: 2rem;
     }
 
@@ -179,16 +202,17 @@
     /* Main Content Grid */
     .main-content {
       display: grid;
-      grid-template-columns: 350px 1fr;
-      gap: 1rem;
-      height: calc(100vh - 300px);
+      grid-template-columns: 380px 1fr;
+      gap: 1.5rem;
+      min-height: 600px;
+      align-items: start;
     }
 
     /* Control Panel */
     .control-panel {
       display: flex;
       flex-direction: column;
-      gap: 1rem;
+      gap: 1.5rem;
     }
 
     .control-card {
@@ -396,8 +420,30 @@
         flex-direction: column;
       }
     }
+
+    /* Button Styles */
+    .live-btn, .copy-btn {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
       cursor: pointer;
       transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+    }
+
+    .copy-btn {
+      background: var(--primary-gradient);
+      color: white;
+      white-space: nowrap;
+    }
+
+    .copy-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(79, 172, 254, 0.4);
     }
 
     .start-btn {
@@ -578,7 +624,11 @@
   <div class="presenter-container">
     <!-- Header Section -->
     <header class="presenter-header">
-      <h1 class="presenter-title">Presenter Control Center</h1>
+      <div class="header-top">
+        <h1 class="presenter-title">Presenter Control Center</h1>
+        <h2 class="room-title" id="roomTitle">Loading Room...</h2>
+        <p class="room-description" id="roomDescription">Loading description...</p>
+      </div>
       
       <div class="room-info-grid">
         <div class="info-card">
@@ -586,8 +636,19 @@
           <div class="info-value room-id" id="roomId">Loading...</div>
         </div>
         
+
         <div class="info-card">
-          <div class="info-label">Participants</div>
+          <div class="info-label">Max Participants</div>
+          <div class="info-value" id="maxParticipants">-</div>
+        </div>
+        
+        <div class="info-card">
+          <div class="info-label">Password Protected</div>
+          <div class="info-value" id="passwordStatus">No</div>
+        </div>
+        
+        <div class="info-card">
+          <div class="info-label">Current Participants</div>
           <div class="info-value" id="participantCount">0</div>
         </div>
         
@@ -600,7 +661,7 @@
           <div class="info-label">Status</div>
           <div class="status-badge status-active" id="sessionStatus">
             <div class="status-dot connected"></div>
-            Live Session Active
+            Ready
           </div>
         </div>
       </div>
@@ -656,20 +717,20 @@
           </h3>
           <div class="audio-status-grid">
             <div class="status-item" id="microphoneStatus">
-              <div class="status-dot connected"></div>
-              <span>Microphone: Connected</span>
+              <div class="status-dot" id="micDot"></div>
+              <span id="micStatusText">Microphone: Not connected</span>
             </div>
             <div class="status-item" id="recordingStatus">
-              <div class="status-dot"></div>
-              <span>Recording: Inactive</span>
+              <div class="status-dot" id="recordingDot"></div>
+              <span id="recordingStatusText">Recording: Stopped</span>
             </div>
             <div class="status-item" id="processingStatus">
-              <div class="status-dot"></div>
-              <span>Processing: Ready</span>
+              <div class="status-dot" id="processingDot"></div>
+              <span id="processingStatusText">Processing: Idle</span>
             </div>
             <div class="status-item" id="translationStatus">
-              <div class="status-dot"></div>
-              <span>Translation: Ready</span>
+              <div class="status-dot" id="translationDot"></div>
+              <span id="translationStatusText">Translation: Idle</span>
             </div>
           </div>
         </div>
@@ -719,17 +780,10 @@
       </section>
     </main>
   </div>
-          <div id="audioStatus">
-            <p><strong>Microphone:</strong> <span id="micStatus">Not connected</span></p>
-            <p><strong>Recording:</strong> <span id="recordingStatus">Stopped</span></p>
-            <p><strong>Processing:</strong> <span id="processingStatus">Idle</span></p>
-            <p><strong>Translation:</strong> <span id="translationStatus">Idle</span></p>
-          </div>
-        </div>
-      </div>
-    </div>
+    </main>
+  </div>
 
-    <div class="participant-list">
+  <div class="participant-list">
       <div class="participant-count">
         Active Participants: <span id="liveParticipantCount">0</span>
       </div>
@@ -747,6 +801,9 @@
     const elements = {
       roomTitle: document.getElementById('roomTitle'),
       roomId: document.getElementById('roomId'),
+      roomDescription: document.getElementById('roomDescription'),
+      maxParticipants: document.getElementById('maxParticipants'),
+      passwordStatus: document.getElementById('passwordStatus'),
       participantCount: document.getElementById('participantCount'),
       duration: document.getElementById('duration'),
       sessionStatus: document.getElementById('sessionStatus'),
@@ -759,10 +816,14 @@
       currentEnglish: document.getElementById('currentEnglish'),
       segmentCount: document.getElementById('segmentCount'),
       lastUpdate: document.getElementById('lastUpdate'),
-      micStatus: document.getElementById('micStatus'),
-      recordingStatus: document.getElementById('recordingStatus'),
-      processingStatus: document.getElementById('processingStatus'),
-      translationStatus: document.getElementById('translationStatus'),
+      micDot: document.getElementById('micDot'),
+      micStatusText: document.getElementById('micStatusText'),
+      recordingDot: document.getElementById('recordingDot'),
+      recordingStatusText: document.getElementById('recordingStatusText'),
+      processingDot: document.getElementById('processingDot'),
+      processingStatusText: document.getElementById('processingStatusText'),
+      translationDot: document.getElementById('translationDot'),
+      translationStatusText: document.getElementById('translationStatusText'),
       liveParticipantCount: document.getElementById('liveParticipantCount')
     };
 
@@ -790,19 +851,47 @@
         updateUI();
         setupEventListeners();
         
-        // Start polling for participant count
-        setInterval(updateParticipantCount, 5000);
+        // Initialize audio status and start periodic updates
+        initializeAudioStatus();
+        await checkMicrophoneAccess();
+        startPeriodicUpdates();
       } catch (error) {
         console.error('Failed to load room:', error);
-        elements.roomTitle.textContent = 'Room Not Found';
+        if (elements.roomTitle) {
+          elements.roomTitle.textContent = 'Room Not Found';
+        }
       }
     }
 
     function updateUI() {
-      elements.roomTitle.textContent = roomData.title;
-      elements.roomId.textContent = roomData.room_id;
-      elements.participantUrl.textContent = roomData.participant_url;
-      elements.participantCount.textContent = roomData.participant_count;
+      // Add null checks to prevent errors
+      if (elements.roomTitle) {
+        elements.roomTitle.textContent = roomData.title || 'Untitled Room';
+      }
+      if (elements.roomId) {
+        elements.roomId.textContent = roomData.room_id || '';
+      }
+      if (elements.roomDescription) {
+        if (roomData.description && roomData.description.trim()) {
+          elements.roomDescription.textContent = roomData.description;
+          elements.roomDescription.style.display = 'block';
+        } else {
+          elements.roomDescription.style.display = 'none';
+        }
+      }
+      if (elements.maxParticipants) {
+        elements.maxParticipants.textContent = roomData.max_participants || 'Unlimited';
+      }
+      if (elements.passwordStatus) {
+        elements.passwordStatus.textContent = roomData.password ? 'Yes' : 'No';
+        elements.passwordStatus.style.color = roomData.password ? '#22c55e' : '#6b7280';
+      }
+      if (elements.participantUrl) {
+        elements.participantUrl.value = roomData.participant_url || '';
+      }
+      if (elements.participantCount) {
+        elements.participantCount.textContent = roomData.participant_count || '0';
+      }
       
       if (roomData.is_live) {
         startLiveInterface();
@@ -810,9 +899,15 @@
     }
 
     function setupEventListeners() {
-      elements.startBtn.addEventListener('click', startLiveSession);
-      elements.stopBtn.addEventListener('click', stopLiveSession);
-      elements.copyUrlBtn.addEventListener('click', copyParticipantUrl);
+      if (elements.startBtn) {
+        elements.startBtn.addEventListener('click', startLiveSession);
+      }
+      if (elements.stopBtn) {
+        elements.stopBtn.addEventListener('click', stopLiveSession);
+      }
+      if (elements.copyUrlBtn) {
+        elements.copyUrlBtn.addEventListener('click', copyParticipantUrl);
+      }
     }
 
     async function startLiveSession() {
@@ -830,7 +925,8 @@
           }
         });
         
-        elements.micStatus.textContent = 'Connected';
+        updateAudioStatus('mic', 'Microphone: Connected', true);
+        updateAudioStatus('recording', 'Recording: Active', true);
         
         // Connect to WebSocket for transcription
         connectWebSocket();
@@ -880,6 +976,11 @@
           websocket.close();
           websocket = null;
         }
+
+        // Reset audio status
+        updateAudioStatus('recording', 'Recording: Stopped', false);
+        updateAudioStatus('processing', 'Processing: Idle', false);
+        updateAudioStatus('translation', 'Translation: Idle', false);
         
         // Update room status
         await updateRoomStatus(false);
@@ -889,10 +990,6 @@
         elements.stopBtn.disabled = true;
         
         updateStatus('Session Ended', 'status-idle');
-        elements.micStatus.textContent = 'Disconnected';
-        elements.recordingStatus.textContent = 'Stopped';
-        elements.processingStatus.textContent = 'Idle';
-        elements.translationStatus.textContent = 'Idle';
         
       } catch (error) {
         console.error('Error stopping session:', error);
@@ -904,7 +1001,6 @@
       isLive = true;
       startTime = Date.now();
       elements.recordingInterface.classList.add('active');
-      elements.recordingStatus.textContent = 'Recording';
       
       // Start duration counter
       setInterval(() => {
@@ -1003,16 +1099,16 @@
     function updateProcessingStatus(status) {
       switch (status) {
         case 'listening':
-          elements.processingStatus.textContent = 'Listening';
-          elements.translationStatus.textContent = 'Idle';
+          updateAudioStatus('processing', 'Processing: Listening', true);
+          updateAudioStatus('translation', 'Translation: Idle', false);
           break;
         case 'transcribing':
-          elements.processingStatus.textContent = 'Transcribing';
-          elements.translationStatus.textContent = 'Idle';
+          updateAudioStatus('processing', 'Processing: Transcribing', true);
+          updateAudioStatus('translation', 'Translation: Idle', false);
           break;
         case 'translating':
-          elements.processingStatus.textContent = 'Processing';
-          elements.translationStatus.textContent = 'Translating';
+          updateAudioStatus('processing', 'Processing: Active', true);
+          updateAudioStatus('translation', 'Translation: Active', true);
           break;
       }
     }
@@ -1092,6 +1188,71 @@
     function updateStatus(text, className) {
       elements.sessionStatus.textContent = text;
       elements.sessionStatus.className = `status-chip ${className}`;
+    }
+
+    // Update audio status indicators
+    function updateAudioStatus(component, status, connected = false) {
+      const dotElement = elements[component + 'Dot'];
+      const textElement = elements[component + 'StatusText'];
+      
+      if (dotElement && textElement) {
+        dotElement.className = `status-dot ${connected ? 'connected' : ''}`;
+        textElement.textContent = status;
+      }
+    }
+
+    // Update session statistics in real-time
+    async function updateSessionStats() {
+      try {
+        const response = await fetch(`/api/rooms/${roomId}/stats`);
+        if (response.ok) {
+          const stats = await response.json();
+          if (elements.segmentCount) {
+            elements.segmentCount.textContent = stats.segments || 0;
+          }
+          if (elements.liveParticipantCount) {
+            elements.liveParticipantCount.textContent = stats.active_participants || 0;
+          }
+          if (elements.participantCount) {
+            elements.participantCount.textContent = stats.participant_count || 0;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to update session stats:', error);
+      }
+    }
+
+    // Initialize audio status
+    function initializeAudioStatus() {
+      updateAudioStatus('mic', 'Microphone: Not connected', false);
+      updateAudioStatus('recording', 'Recording: Stopped', false);
+      updateAudioStatus('processing', 'Processing: Idle', false);
+      updateAudioStatus('translation', 'Translation: Idle', false);
+    }
+
+    // Check microphone access
+    async function checkMicrophoneAccess() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        updateAudioStatus('mic', 'Microphone: Connected', true);
+        stream.getTracks().forEach(track => track.stop()); // Clean up
+        return true;
+      } catch (error) {
+        updateAudioStatus('mic', 'Microphone: Access denied', false);
+        return false;
+      }
+    }
+
+    // Start periodic updates
+    function startPeriodicUpdates() {
+      // Update session stats every 5 seconds
+      setInterval(updateSessionStats, 5000);
+      
+      // Update participant count every 3 seconds  
+      setInterval(updateParticipantCount, 3000);
+      
+      // Check microphone access periodically
+      setInterval(checkMicrophoneAccess, 10000);
     }
 
     // Start the application

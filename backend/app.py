@@ -921,6 +921,36 @@ async def get_room(room_id: str) -> RoomResponse:
     )
 
 
+@app.get("/api/rooms/{room_id}/stats")
+async def get_room_stats(room_id: str):
+    """Get real-time statistics for a room."""
+    room = await AsyncDatabaseService.get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    
+    # Get current participant count
+    current_participants = ROOM_PARTICIPANTS.get(room_id, set())
+    
+    # Get segment count from presenter session if active
+    segments = 0
+    presenter_id = room.presenter_session_id
+    if presenter_id and presenter_id in ACTIVE_SESSIONS:
+        session_state = ACTIVE_SESSIONS[presenter_id]
+        if hasattr(session_state, 'transcript') and session_state.transcript:
+            segments = len(session_state.transcript.segments)
+    
+    return {
+        "room_id": room_id,
+        "participant_count": len(current_participants),
+        "active_participants": len(current_participants),
+        "max_concurrent_participants": room.max_concurrent_participants,
+        "segments": segments,
+        "is_live": room.is_live,
+        "duration_ms": room.total_duration_ms,
+        "status": "live" if room.is_live else "inactive"
+    }
+
+
 @app.get("/room/{room_id}")
 async def room_page(room_id: str) -> FileResponse:
     """Serve the participant interface for a room."""
