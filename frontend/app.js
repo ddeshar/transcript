@@ -25,6 +25,14 @@ let showEnglishPreview = true;
 let transcriptSegments = [];
 let lastPartialId = null;
 
+// TTS (Text-to-Speech) variables
+let ttsEnabled = false;
+let ttsVoice = 'nova';
+let ttsSpeed = 1.0;
+let ttsProvider = 'mock';
+let availableVoices = [];
+let currentAudio = null;
+
 const statusMap = {
   idle: { label: "Idle", className: "status-idle" },
   ready: { label: "Ready", className: "status-idle" },
@@ -45,6 +53,107 @@ function setStatus(status, message) {
 
 function appendLog(message) {
   elements.log.textContent = message;
+}
+
+// TTS Functions
+async function initializeTTS() {
+  try {
+    const response = await fetch('/api/tts/voices');
+    const data = await response.json();
+    
+    if (data.status === 'success') {
+      availableVoices = data.voices;
+      ttsProvider = data.provider;
+      console.log(`TTS initialized with ${availableVoices.length} voices (${ttsProvider})`);
+    } else {
+      console.warn('Failed to load TTS voices:', data.error);
+    }
+  } catch (error) {
+    console.warn('TTS not available:', error);
+  }
+}
+
+async function synthesizeSpeech(text) {
+  if (!ttsEnabled || !text.trim()) return;
+  
+  try {
+    // Stop any currently playing audio
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+    }
+    
+    const response = await fetch('/api/tts/synthesize', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text: text,
+        voice_id: ttsVoice,
+        speed: ttsSpeed,
+        language: 'th'
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (result.status === 'success') {
+      if (result.mock) {
+        console.log(`Mock TTS: "${text}" (${result.duration_ms}ms, voice: ${result.voice_used})`);
+        showTTSFeedback(text, result.voice_used);
+      } else if (result.audio_data) {
+        // Play real audio
+        const audioBlob = base64ToBlob(result.audio_data, 'audio/mp3');
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        currentAudio = new Audio(audioUrl);
+        currentAudio.play().catch(error => {
+          console.warn('Failed to play TTS audio:', error);
+        });
+        
+        // Clean up URL after playing
+        currentAudio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+        };
+      }
+    } else {
+      console.warn('TTS synthesis failed:', result.error);
+    }
+  } catch (error) {
+    console.warn('TTS synthesis error:', error);
+  }
+}
+
+function showTTSFeedback(text, voice) {
+  // Create visual feedback for mock TTS
+  const feedback = document.createElement('div');
+  feedback.className = 'tts-feedback';
+  feedback.innerHTML = `
+    <div class="tts-icon">🔊</div>
+    <div class="tts-text">${text.substring(0, 50)}${text.length > 50 ? '...' : ''}</div>
+    <div class="tts-voice">${voice}</div>
+  `;
+  
+  document.body.appendChild(feedback);
+  
+  setTimeout(() => {
+    if (feedback.parentNode) {
+      feedback.parentNode.removeChild(feedback);
+    }
+  }, 3000);
+}
+
+function base64ToBlob(base64, mimeType) {
+  const byteCharacters = atob(base64);
+  const byteNumbers = new Array(byteCharacters.length);
+  
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  
+  const byteArray = new Uint8Array(byteNumbers);
+  return new Blob([byteArray], { type: mimeType });
 }
 
 let reconnectAttempts = 0;
@@ -167,6 +276,11 @@ function updateCaptions(payload, isFinal) {
   if (!isFinal) {
     lastPartialId = payload.segmentId;
     return;
+  }
+
+  // Trigger TTS for final Thai translation
+  if (isFinal && thai && thai !== "…") {
+    synthesizeSpeech(thai);
   }
 
   transcriptSegments.push(payload);
@@ -426,3 +540,36 @@ window.addEventListener('focus', () => {
 });
 
 setStatus("idle", "Click Start to begin.");
+
+// Initialize TTS
+initializeTTS();
+
+// TTS Control Event Listeners
+document.getElementById('ttsToggle').addEventListener('change', function(e) {
+  ttsEnabled = e.target.checked;
+  const ttsControls = document.getElementById('ttsControls');
+  
+  if (ttsEnabled) {
+    ttsControls.style.display = 'flex';
+    console.log('TTS enabled');
+  } else {
+    ttsControls.style.display = 'none';
+    // Stop any currently playing audio
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+    }
+    console.log('TTS disabled');
+  }
+});
+
+document.getElementById('voiceSelect').addEventListener('change', function(e) {
+  ttsVoice = e.target.value;
+  console.log('TTS voice changed to:', ttsVoice);
+});
+
+document.getElementById('speedSlider').addEventListener('input', function(e) {
+  ttsSpeed = parseFloat(e.target.value);
+  document.getElementById('speedValue').textContent = ttsSpeed + 'x';
+  console.log('TTS speed changed to:', ttsSpeed);
+});

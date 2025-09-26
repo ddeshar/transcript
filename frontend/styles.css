@@ -278,6 +278,136 @@ button.primary {
   border-color: rgba(52, 211, 153, 0.5);
 }
 
+/* TTS Controls Styling */
+.tts-controls {
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-top: 8px;
+}
+
+.tts-setting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.tts-setting label {
+  min-width: 60px;
+  font-weight: 500;
+}
+
+.tts-setting select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(17, 24, 39, 0.8);
+  color: var(--text);
+  font-size: 0.9rem;
+  min-width: 140px;
+}
+
+.tts-setting input[type="range"] {
+  width: 80px;
+  height: 4px;
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 2px;
+  outline: none;
+  appearance: none;
+}
+
+.tts-setting input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.tts-setting input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+}
+
+#speedValue {
+  min-width: 35px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* TTS Feedback Animation */
+.tts-feedback {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: rgba(17, 24, 39, 0.95);
+  border: 1px solid rgba(52, 211, 153, 0.5);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 300px;
+  z-index: 1000;
+  animation: slideInRight 0.3s ease-out, fadeOut 0.5s ease-out 2.5s forwards;
+}
+
+.tts-icon {
+  font-size: 1.2em;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.tts-text {
+  color: var(--text);
+  font-weight: 500;
+  flex: 1;
+}
+
+.tts-voice {
+  color: var(--muted);
+  font-size: 0.8em;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
 .captions {
   background: linear-gradient(135deg, rgba(17, 24, 39, 0.9), rgba(30, 41, 59, 0.9));
   border-radius: 24px;

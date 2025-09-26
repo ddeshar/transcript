@@ -13,6 +13,12 @@ from .mt_openai_gpt import OpenAIGPTProvider
 from .mt_mock import MockMTProvider
 from .mt_simple_thai import SimpleThaiProvider
 
+# TTS Providers
+from .tts_base import TTSProvider, TTSVoice, TTSRequest, TTSResult
+from .tts_openai import OpenAITTSProvider
+from .tts_aws_polly import AWSPollyTTSProvider
+from .tts_mock import MockTTSProvider
+
 # Optional heavy dependencies - only import if available
 try:
     from .asr_vosk import VoskASRProvider
@@ -233,6 +239,24 @@ def create_mt_provider(
     if name == "simple_thai":
         return SimpleThaiProvider()
     raise ValueError(f"Unsupported MT provider: {name}")
+
+
+def create_tts_provider(name: str, **settings) -> TTSProvider:
+    """Create TTS provider instance."""
+    if name == "mock":
+        return MockTTSProvider()
+    if name == "openai":
+        return OpenAITTSProvider(
+            api_key=settings.get("OPENAI_API_KEY"),
+            model=settings.get("OPENAI_TTS_MODEL", "tts-1")
+        )
+    if name == "aws_polly":
+        return AWSPollyTTSProvider(
+            access_key=settings.get("AWS_ACCESS_KEY_ID"),
+            secret_key=settings.get("AWS_SECRET_ACCESS_KEY"),
+            region=settings.get("AWS_REGION", "us-east-1")
+        )
+    raise ValueError(f"Unsupported TTS provider: {name}")
 
 
 __all__ = ["create_asr_provider", "create_mt_provider"]

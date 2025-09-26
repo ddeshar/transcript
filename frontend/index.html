@@ -120,11 +120,35 @@
                 <input type="checkbox" id="englishToggle" checked />
                 <span>Show English preview</span>
               </label>
+              <label class="toggle">
+                <input type="checkbox" id="ttsToggle" />
+                <span>🔊 Thai Audio (TTS)</span>
+              </label>
               <div class="font-size">
                 <span>Size:</span>
                 <button data-size="s" class="size-btn">S</button>
                 <button data-size="m" class="size-btn active">M</button>
                 <button data-size="l" class="size-btn">L</button>
+              </div>
+            </div>
+            
+            <!-- TTS Controls (initially hidden) -->
+            <div class="control-row tts-controls" id="ttsControls" style="display: none;">
+              <div class="tts-setting">
+                <label for="voiceSelect">Voice:</label>
+                <select id="voiceSelect">
+                  <option value="alloy">Alloy (Neutral)</option>
+                  <option value="echo">Echo (Male)</option>
+                  <option value="fable">Fable (Female)</option>
+                  <option value="onyx">Onyx (Male)</option>
+                  <option value="nova" selected>Nova (Female)</option>
+                  <option value="shimmer">Shimmer (Female)</option>
+                </select>
+              </div>
+              <div class="tts-setting">
+                <label for="speedSlider">Speed:</label>
+                <input type="range" id="speedSlider" min="0.5" max="2.0" step="0.1" value="1.0" />
+                <span id="speedValue">1.0x</span>
               </div>
             </div>
           </div>

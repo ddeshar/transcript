@@ -57,6 +57,9 @@ ACTIVE_SESSIONS: Dict[str, ConnectionState] = {}
 class Settings(BaseSettings):
     asr_provider: str = Field(default="mock", alias="ASR_PROVIDER")
     mt_provider: str = Field(default="mock", alias="MT_PROVIDER")
+    tts_provider: str = Field(default="mock", alias="TTS_PROVIDER")
+    tts_voice: str = Field(default="alloy", alias="TTS_VOICE")
+    tts_speed: float = Field(default=1.0, alias="TTS_SPEED")
     cors_origins: str = Field(
         default="http://localhost:8000",
         alias="CORS_ORIGINS",
@@ -624,6 +627,17 @@ async def get_settings() -> JSONResponse:
                     "description": "Mock translation provider for testing"
                 }
             },
+            "tts_provider_info": {
+                "openai": {
+                    "description": "OpenAI Text-to-Speech API ($15/1M characters)"
+                },
+                "aws_polly": {
+                    "description": "AWS Polly TTS service ($4/1M characters)"
+                },
+                "mock": {
+                    "description": "Mock TTS provider for testing"
+                }
+            },
             "provider_categories": {
                 "cloud_asr": [
                     "whisper_api", "whisper_gpt", "gpt_realtime",
@@ -745,6 +759,9 @@ async def get_env_vars() -> JSONResponse:
             # Core Providers
             "ASR_PROVIDER": os.getenv("ASR_PROVIDER", "vosk"),
             "MT_PROVIDER": os.getenv("MT_PROVIDER", "marian"),
+            "TTS_PROVIDER": os.getenv("TTS_PROVIDER", "mock"),
+            "TTS_VOICE": os.getenv("TTS_VOICE", "nova"),
+            "TTS_SPEED": os.getenv("TTS_SPEED", "1.0"),
             
             # Audio Settings
             "AUDIO_SAMPLE_RATE": os.getenv("AUDIO_SAMPLE_RATE", "16000"),
@@ -899,6 +916,141 @@ async def restart_container() -> JSONResponse:
         "message": "Container restart initiated",
         "timestamp": utc_timestamp_ms(),
     })
+
+
+# TTS (Text-to-Speech) API Endpoints
+@app.get("/api/tts/voices")
+async def get_tts_voices() -> JSONResponse:
+    """Get available TTS voices for the configured provider."""
+    try:
+        from .providers import create_tts_provider
+        
+        settings_dict = {
+            "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
+            "OPENAI_TTS_MODEL": os.getenv("OPENAI_TTS_MODEL", "tts-1"),
+            "AWS_ACCESS_KEY_ID": os.getenv("AWS_ACCESS_KEY_ID"),
+            "AWS_SECRET_ACCESS_KEY": os.getenv("AWS_SECRET_ACCESS_KEY"),
+            "AWS_REGION": os.getenv("AWS_REGION", "us-east-1"),
+        }
+        
+        tts_provider_name = os.getenv("TTS_PROVIDER", "mock")
+        tts_provider = create_tts_provider(tts_provider_name, **settings_dict)
+        
+        await tts_provider.setup()
+        voices = tts_provider.get_available_voices()
+        
+        voices_data = [
+            {
+                "id": voice.id,
+                "name": voice.name,
+                "gender": voice.gender,
+                "language": voice.language,
+                "accent": voice.accent,
+                "description": voice.description
+            }
+            for voice in voices
+        ]
+        
+        return JSONResponse({
+            "voices": voices_data,
+            "provider": tts_provider_name,
+            "status": "success"
+        })
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Failed to get TTS voices",
+                "details": str(e)
+            }
+        )
+
+
+@app.post("/api/tts/synthesize")
+async def synthesize_speech(request: dict) -> JSONResponse:
+    """Synthesize speech from text using TTS provider."""
+    try:
+        from .providers import create_tts_provider
+        from .providers.tts_base import TTSRequest
+        
+        # Get request parameters
+        text = request.get("text", "")
+        voice_id = request.get("voice_id", "alloy")
+        speed = float(request.get("speed", 1.0))
+        language = request.get("language", "th")
+        
+        if not text:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Text is required"}
+            )
+        
+        # Create TTS provider
+        settings_dict = {
+            "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
+            "OPENAI_TTS_MODEL": os.getenv("OPENAI_TTS_MODEL", "tts-1"),
+            "AWS_ACCESS_KEY_ID": os.getenv("AWS_ACCESS_KEY_ID"),
+            "AWS_SECRET_ACCESS_KEY": os.getenv("AWS_SECRET_ACCESS_KEY"),
+            "AWS_REGION": os.getenv("AWS_REGION", "us-east-1"),
+        }
+        
+        tts_provider_name = os.getenv("TTS_PROVIDER", "mock")
+        tts_provider = create_tts_provider(tts_provider_name, **settings_dict)
+        
+        await tts_provider.setup()
+        
+        # Create TTS request
+        tts_request = TTSRequest(
+            text=text,
+            voice_id=voice_id,
+            speed=speed,
+            language=language
+        )
+        
+        # Synthesize speech
+        result = await tts_provider.synthesize(tts_request)
+        
+        if result.success:
+            # For mock provider, return metadata only
+            if tts_provider_name == "mock":
+                return JSONResponse({
+                    "status": "success",
+                    "mock": True,
+                    "message": "Mock TTS synthesis completed",
+                    "duration_ms": result.duration_ms,
+                    "voice_used": result.voice_used,
+                    "text_length": len(text)
+                })
+            else:
+                # For real providers, return audio as base64
+                import base64
+                audio_base64 = base64.b64encode(result.audio_data).decode()
+                
+                return JSONResponse({
+                    "status": "success",
+                    "audio_data": audio_base64,
+                    "format": result.format,
+                    "duration_ms": result.duration_ms,
+                    "voice_used": result.voice_used
+                })
+        else:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": "TTS synthesis failed",
+                    "details": result.error_message
+                }
+            )
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Failed to synthesize speech",
+                "details": str(e)
+            }
+        )
 
 
 @app.get("/teleprompter")
