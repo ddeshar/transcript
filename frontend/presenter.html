@@ -1208,6 +1208,8 @@
     let sessionId = null;
     let isLive = false;
     let segmentCounter = 0;
+    let audioStorage = new Map(); // Store audio data by timestamp for presenter
+    const MAX_AUDIO_CACHE_SIZE = 100; // Limit audio cache to prevent memory issues
     let startTime = null;
 
     // Load historical subtitles for presenter
@@ -1528,6 +1530,26 @@
           segmentCounter++;
           elements.segmentCount.textContent = segmentCounter;
           elements.lastUpdate.textContent = new Date().toLocaleTimeString();
+          
+          // Store audio data for historical playback (presenter)
+          if (data.audio && data.audio.thai_audio_base64) {
+            const timestamp = data.timestamp_ms || Date.now();
+            audioStorage.set(timestamp, {
+              audioBase64: data.audio.thai_audio_base64,
+              format: data.audio.audio_format || 'mp3',
+              thai: data.thai,
+              english: data.english
+            });
+            
+            // Prevent memory issues by limiting cache size
+            if (audioStorage.size > MAX_AUDIO_CACHE_SIZE) {
+              const oldestKey = audioStorage.keys().next().value;
+              audioStorage.delete(oldestKey);
+            }
+            
+            // Play Thai audio (presenter generates and plays audio)
+            playThaiAudioFromBase64(data.audio.thai_audio_base64, data.audio.audio_format || 'mp3');
+          }
           break;
           
         case 'error':
@@ -1837,6 +1859,31 @@
         sampleBtn.innerHTML = '<i class="fas fa-play"></i> Test Voice';
         sampleBtn.disabled = false;
         alert('Error playing sample audio. Please try again.');
+      }
+    }
+
+    // Thai Audio Playback Function
+    async function playThaiAudioFromBase64(audioBase64, format = 'mp3') {
+      try {
+        // Convert base64 to blob
+        const mimeType = format === 'wav' ? 'audio/wav' : 'audio/mpeg';
+        const audioBlob = base64ToBlob(audioBase64, mimeType);
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        // Create and play audio
+        const audio = new Audio(audioUrl);
+        audio.volume = 0.8; // Slightly lower volume for presenter
+        
+        await audio.play();
+        
+        // Clean up URL after playing
+        audio.addEventListener('ended', () => {
+          URL.revokeObjectURL(audioUrl);
+        });
+        
+        console.log('Thai audio played successfully');
+      } catch (error) {
+        console.error('Error playing Thai audio:', error);
       }
     }
 

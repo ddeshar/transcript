@@ -302,7 +302,7 @@
     .header-actions {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 1rem;
       flex-wrap: wrap;
     }
 
@@ -319,7 +319,7 @@
       background: var(--bg-secondary, #2d3142);
       color: var(--text-primary);
       font-size: 0.85rem;
-      width: 150px;
+      width: 200px;
       transition: border-color 0.2s ease;
     }
 
@@ -352,10 +352,7 @@
       color: var(--text-primary);
     }
 
-    .export-controls {
-      display: flex;
-      gap: 0.25rem;
-    }
+    /* Export controls removed for cleaner interface */
 
     .btn-sm {
       padding: 0.3rem 0.5rem;
@@ -580,6 +577,13 @@
       font-size: calc(var(--font-size-history) * 0.875);
       color: var(--text-secondary);
       line-height: 1.4;
+    }
+
+    .timeline-highlight {
+      background: rgba(76, 175, 80, 0.2) !important;
+      border-left: 3px solid #4CAF50 !important;
+      transform: scale(1.02);
+      transition: all 0.2s ease;
     }
 
     /* Status Indicators */
@@ -1376,16 +1380,9 @@
             <div class="toggle-item">
               <div class="toggle-label">
                 <i class="fas fa-headphones"></i>
-                English Audio
+                Audio
               </div>
-              <div class="toggle-switch active" id="englishAudioToggle"></div>
-            </div>
-            <div class="toggle-item">
-              <div class="toggle-label">
-                <i class="fas fa-headphones"></i>
-                Thai Audio
-              </div>
-              <div class="toggle-switch" id="thaiAudioToggle"></div>
+              <div class="toggle-switch active" id="thaiAudioToggle"></div>
             </div>
           </div>
         </div>
@@ -1436,17 +1433,6 @@
               <span id="fontSizeDisplay">100%</span>
               <button id="fontIncrease" class="btn btn-sm" title="Increase Font Size">
                 <i class="fas fa-plus"></i>
-              </button>
-            </div>
-            <div class="export-controls">
-              <button id="exportTxt" class="btn btn-sm" title="Export as TXT">
-                <i class="fas fa-file-alt"></i>
-              </button>
-              <button id="exportPdf" class="btn btn-sm" title="Export as PDF">
-                <i class="fas fa-file-pdf"></i>
-              </button>
-              <button id="exportSrt" class="btn btn-sm" title="Export as SRT">
-                <i class="fas fa-closed-captioning"></i>
               </button>
             </div>
             <button id="autoScrollToggle" class="btn btn-sm active" title="Toggle Auto-scroll">
@@ -1588,7 +1574,6 @@
       // Toggle controls
       thaiToggle: document.getElementById('thaiToggle'),
       englishToggle: document.getElementById('englishToggle'),
-      englishAudioToggle: document.getElementById('englishAudioToggle'),
       thaiAudioToggle: document.getElementById('thaiAudioToggle'),
       
       // Subtitle area
@@ -1612,15 +1597,22 @@
       // Timeline controls
       timelineControls: document.getElementById('timelineControls'),
       timelineMinimize: document.getElementById('timelineMinimize'),
+      timeline: document.getElementById('timeline'),
+      timelineProgress: document.getElementById('timelineProgress'),
+      timelineScrubber: document.getElementById('timelineScrubber'),
+      playPauseBtn: document.getElementById('playPauseBtn'),
+      rewindBtn: document.getElementById('rewindBtn'),
+      forwardBtn: document.getElementById('forwardBtn'),
+      liveBtn: document.getElementById('liveBtn'),
+      timeDisplay: document.getElementById('timeDisplay'),
+      volumeSlider: document.getElementById('volumeSlider'),
+      audioPlaybackBtn: document.getElementById('audioPlaybackBtn'),
       
       // Advanced features
       searchInput: document.getElementById('searchInput'),
       fontDecrease: document.getElementById('fontDecrease'),
       fontIncrease: document.getElementById('fontIncrease'),
       fontSizeDisplay: document.getElementById('fontSizeDisplay'),
-      exportTxt: document.getElementById('exportTxt'),
-      exportPdf: document.getElementById('exportPdf'),
-      exportSrt: document.getElementById('exportSrt'),
       autoScrollToggle: document.getElementById('autoScrollToggle')
     };
 
@@ -1630,13 +1622,19 @@
     let isLive = false;
     let showEnglishSubtitles = true;  // Enable English subtitles by default
     let showThaiSubtitles = true;
-    let currentAudioLanguage = 'english';
+    let currentAudioLanguage = 'thai';  // Thai audio is the only option now
     let transcriptSegments = [];
     let latestSubtitle = null;
     
     // Font size settings
     let thaiFontSize = 1.5;
     let englishFontSize = 1.1;
+    
+    // Timeline state variables
+    let currentTime = 0;
+    let duration = 3600; // Default 1 hour
+    let isPlaying = false;
+    let isAtLive = true;
 
     // Initialize the page
     async function initializePage() {
@@ -1655,8 +1653,13 @@
       setupFullscreenControls();
       setupTimelineControls();
       
+
+      
       // Initialize advanced features
       initializeAdvancedFeatures();
+      
+      // Initialize timeline with audio integration
+      initializeTimelineWithAudio();
       
       // Load historical subtitles
       loadHistoricalSubtitles();
@@ -1857,26 +1860,30 @@
         });
       }
       
-      // English audio toggle
-      if (elements.englishAudioToggle) {
-        elements.englishAudioToggle.addEventListener('click', () => {
-          currentAudioLanguage = 'english';
-          elements.englishAudioToggle.classList.add('active');
-          elements.thaiAudioToggle.classList.remove('active');
-          console.log('Audio language: English');
-        });
-      }
-      
-      // Thai audio toggle
+      // Thai audio toggle (enabled by default)
       if (elements.thaiAudioToggle) {
         elements.thaiAudioToggle.addEventListener('click', () => {
-          currentAudioLanguage = 'thai';
-          elements.thaiAudioToggle.classList.add('active');
-          elements.englishAudioToggle.classList.remove('active');
-          console.log('Audio language: Thai');
+          // Toggle Thai audio on/off
+          audioEnabled = !audioEnabled;
+          if (audioEnabled) {
+            currentAudioLanguage = 'thai';
+            elements.thaiAudioToggle.classList.add('active');
+            console.log('Thai audio: ON');
+          } else {
+            elements.thaiAudioToggle.classList.remove('active');
+            console.log('Thai audio: OFF');
+          }
+          updateTimelineAudio();
         });
+        
+        // Set Thai as default (enabled)
+        elements.thaiAudioToggle.classList.add('active');
+        currentAudioLanguage = 'thai';
+        audioEnabled = true;
       }
     }
+
+
 
     function updateSubtitleVisibility() {
       if (elements.currentThai) {
@@ -2033,30 +2040,8 @@
         });
       }
 
-      // Audio language switch
-      if (elements.englishAudioBtn) {
-        elements.englishAudioBtn.addEventListener('click', () => {
-          currentAudioLanguage = 'english';
-          elements.englishAudioBtn.classList.add('active');
-          if (elements.thaiAudioBtn) {
-            elements.thaiAudioBtn.classList.remove('active');
-          }
-          console.log('Audio language switched to:', currentAudioLanguage);
-          // TODO: Switch audio track
-        });
-      }
-
-      if (elements.thaiAudioBtn) {
-        elements.thaiAudioBtn.addEventListener('click', () => {
-          currentAudioLanguage = 'thai';
-          elements.thaiAudioBtn.classList.add('active');
-          if (elements.englishAudioBtn) {
-            elements.englishAudioBtn.classList.remove('active');
-          }
-          console.log('Audio language switched to:', currentAudioLanguage);
-          // TODO: Switch audio track
-        });
-      }
+      // Audio controls are now handled by the main thaiAudioToggle
+      // Audio timeline controls use currentAudioLanguage = 'thai' by default
 
       // Playback controls with enhanced functionality
       if (elements.playPauseBtn) {
@@ -2235,7 +2220,7 @@
         <div class="history-english" style="display: ${showEnglishSubtitles ? 'block' : 'none'}">${data.english || ''}</div>
       `;
       
-      // Add click handler to show this subtitle as current
+      // Add click handler to show this subtitle as current and play audio
       historyItem.addEventListener('click', function() {
         elements.currentThai.textContent = data.thai || '';
         elements.currentEnglish.textContent = data.english || '';
@@ -2246,6 +2231,16 @@
         const noSubtitleMsg = document.getElementById('noSubtitleMessage');
         if (noSubtitleMsg) {
           noSubtitleMsg.style.display = 'none';
+        }
+        
+        // Play audio if available
+        const timestamp = data.timestamp_ms;
+        if (timestamp && audioStorage.has(timestamp)) {
+          const audioData = audioStorage.get(timestamp);
+          playThaiAudio(audioData.audioBase64, audioData.format);
+        } else {
+          // Try to generate Thai audio for this text
+          generateAndPlayThaiAudio(data.thai || data.english);
         }
       });
       
@@ -2274,6 +2269,8 @@
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${wsProtocol}//${window.location.host}/ws/room/${roomId}`;
         
+        // PERFORMANCE: Participants use /ws/room/{id} endpoint (receive-only)
+        // Audio/subtitle saving happens only from presenter via /ws/transcribe
         console.log(`Connecting to WebSocket: ${wsUrl}`);
         websocket = new WebSocket(wsUrl);
         
@@ -2378,6 +2375,14 @@
           updateParticipantCount(data.count);
           break;
           
+        case 'thai_audio':
+          // Thai audio generation only available from presenter interface
+          console.log('Thai audio received (presenter only):', data.text);
+          if (data.audio_data) {
+            playThaiAudio(data.audio_data, data.format || 'mp3');
+          }
+          break;
+          
         default:
           console.log('Unknown message type:', data.type);
       }
@@ -2474,6 +2479,26 @@
       // For live streaming, just update current subtitle display
       updateCurrentSubtitle(data);
       
+      // Store audio data for historical playback
+      if (data.type === 'final' && data.audio && data.audio.thai_audio_base64) {
+        const timestamp = data.timestamp_ms || Date.now();
+        audioStorage.set(timestamp, {
+          audioBase64: data.audio.thai_audio_base64,
+          format: data.audio.audio_format || 'mp3',
+          thai: data.thai,
+          english: data.english
+        });
+        
+        // Prevent memory issues by limiting cache size
+        if (audioStorage.size > MAX_AUDIO_CACHE_SIZE) {
+          const oldestKey = audioStorage.keys().next().value;
+          audioStorage.delete(oldestKey);
+        }
+        
+        // Play Thai audio if available and final
+        playThaiAudio(data.audio.thai_audio_base64, data.audio.audio_format);
+      }
+      
       // Don't auto-hide - let final results persist
       // and move to history when new ones come in
     }
@@ -2532,7 +2557,7 @@
           <div class="history-english" style="display: ${showEnglishSubtitles ? 'block' : 'none'}">${latestSubtitle.english || ''}</div>
         `;
         
-        // Add click handler to show this subtitle as current
+        // Add click handler to show this subtitle as current and play audio
         historyItem.addEventListener('click', function() {
           elements.currentThai.textContent = latestSubtitle.thai || '';
           elements.currentEnglish.textContent = latestSubtitle.english || '';
@@ -2543,6 +2568,16 @@
           const noSubtitleMsg = document.getElementById('noSubtitleMessage');
           if (noSubtitleMsg) {
             noSubtitleMsg.style.display = 'none';
+          }
+          
+          // Play audio if available
+          const timestamp = latestSubtitle.timestamp_ms;
+          if (timestamp && audioStorage.has(timestamp)) {
+            const audioData = audioStorage.get(timestamp);
+            playThaiAudio(audioData.audioBase64, audioData.format);
+          } else {
+            // Try to generate Thai audio for this text
+            generateAndPlayThaiAudio(latestSubtitle.thai || latestSubtitle.english);
           }
         });
         
@@ -2594,7 +2629,12 @@
       
       currentTime = duration * percentage;
       updateTimeDisplay();
-      // TODO: Seek audio to currentTime
+      
+      // Find and display matching subtitle at this timeline position
+      findAndDisplaySubtitleAtTime(currentTime);
+      
+      // Play audio for the subtitle at this position (if available)
+      playAudioAtTime(currentTime);
     }
 
     function goToLive() {
@@ -2686,6 +2726,210 @@
         }
       }
     }
+
+    // Audio playback functions
+    let audioEnabled = true;
+    let currentAudio = null;
+    
+    // Audio storage for historical playback
+    let audioStorage = new Map(); // Store audio data by timestamp
+    const MAX_AUDIO_CACHE_SIZE = 100; // Limit audio cache to prevent memory issues
+
+    function playThaiAudio(audioBase64, format = 'mp3') {
+      if (!audioEnabled || !audioBase64 || currentAudioLanguage !== 'thai') return;
+      
+      try {
+        // Stop any currently playing audio
+        if (currentAudio) {
+          currentAudio.pause();
+          currentAudio = null;
+        }
+        
+        // Create audio blob from base64
+        const audioData = atob(audioBase64);
+        const audioArray = new Uint8Array(audioData.length);
+        for (let i = 0; i < audioData.length; i++) {
+          audioArray[i] = audioData.charCodeAt(i);
+        }
+        
+        // Determine MIME type based on format
+        let mimeType = 'audio/mpeg'; // Default to MP3
+        if (format === 'wav') mimeType = 'audio/wav';
+        else if (format === 'ogg') mimeType = 'audio/ogg';
+        
+        const audioBlob = new Blob([audioArray], { type: mimeType });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        // Create and play audio
+        currentAudio = new Audio(audioUrl);
+        currentAudio.volume = 0.8; // Slightly lower volume
+        
+        currentAudio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          currentAudio = null;
+        };
+        
+        currentAudio.onerror = (e) => {
+          console.error('Audio playback error:', e);
+          URL.revokeObjectURL(audioUrl);
+          currentAudio = null;
+        };
+        
+        currentAudio.play().catch(e => {
+          console.error('Failed to play audio:', e);
+          URL.revokeObjectURL(audioUrl);
+          currentAudio = null;
+        });
+        
+      } catch (error) {
+        console.error('Error processing audio:', error);
+      }
+    }
+
+    function updateTimelineAudio() {
+      // Update timeline to use the selected audio language
+      console.log(`Timeline audio switched to: ${currentAudioLanguage}`);
+      
+      // If audio is currently playing and language switched, stop it
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+      }
+    }
+
+    function generateAndPlayThaiAudio(text) {
+      if (!text || !audioEnabled) return;
+      
+      console.log('Thai audio not available for historical subtitle:', text);
+      console.log('Note: Audio generation only available from presenter interface');
+      
+      // Participants don't generate audio to avoid performance issues
+      // Only the presenter should generate and save audio files
+      // Participants can only play pre-generated audio from storage
+    }
+
+    function renderFinalAudioFiles() {
+      // Call backend to render final audio files
+      if (!roomId) {
+        console.warn('No room ID available for audio rendering');
+        return;
+      }
+      
+      fetch('/api/audio/render', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        },
+        body: JSON.stringify({ room_id: roomId })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          console.log('Final audio files rendered:', data.files);
+          console.log('Statistics:', data.statistics);
+        } else {
+          console.error('Failed to render audio files:', data.error);
+        }
+      })
+      .catch(error => {
+        console.error('Error rendering audio files:', error);
+      });
+    }
+
+    function findAndDisplaySubtitleAtTime(timeSeconds) {
+      // Convert time to milliseconds for comparison
+      const timeMs = timeSeconds * 1000;
+      
+      // Find the subtitle segment closest to this time
+      const historyItems = elements.subtitleHistory.querySelectorAll('.history-item');
+      let closestItem = null;
+      let closestTimeDiff = Infinity;
+      
+      historyItems.forEach(item => {
+        const timeElement = item.querySelector('.history-time');
+        if (timeElement) {
+          const timeText = timeElement.textContent;
+          const itemTimeMs = parseTimeToMs(timeText);
+          if (itemTimeMs > 0) {
+            const timeDiff = Math.abs(timeMs - itemTimeMs);
+            if (timeDiff < closestTimeDiff) {
+              closestTimeDiff = timeDiff;
+              closestItem = item;
+            }
+          }
+        }
+      });
+      
+      if (closestItem) {
+        // Extract subtitle data from the closest item
+        const englishElement = closestItem.querySelector('.history-english');
+        const thaiElement = closestItem.querySelector('.history-thai');
+        
+        const subtitleData = {
+          english: englishElement ? englishElement.textContent : '',
+          thai: thaiElement ? thaiElement.textContent : '',
+          timestamp_ms: parseTimeToMs(closestItem.querySelector('.history-time').textContent)
+        };
+        
+        // Display this subtitle in current subtitle area
+        updateCurrentSubtitle(subtitleData);
+        
+        // Highlight the item in history
+        historyItems.forEach(item => item.classList.remove('timeline-highlight'));
+        closestItem.classList.add('timeline-highlight');
+        
+        console.log(`Showing subtitle at ${timeSeconds.toFixed(1)}s:`, subtitleData.english);
+      }
+    }
+
+    function playAudioAtTime(timeSeconds) {
+      // Stop any currently playing audio
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+      }
+      
+      // For now, we'll implement this when we have timeline audio data
+      // This would require audio segments to be stored with timestamps
+      console.log(`Audio seek to ${timeSeconds.toFixed(1)}s (${currentAudioLanguage})`);
+      
+      // TODO: Load and play audio file for the segment at this timeline position
+      // This would require the backend to provide timeline-indexed audio files
+    }
+
+    function parseTimeToMs(timeString) {
+      // Parse time string like "14:25:30" to milliseconds
+      try {
+        const timeParts = timeString.match(/(\d{2}):(\d{2}):(\d{2})/);
+        if (timeParts) {
+          const hours = parseInt(timeParts[1]);
+          const minutes = parseInt(timeParts[2]);
+          const seconds = parseInt(timeParts[3]);
+          return (hours * 3600 + minutes * 60 + seconds) * 1000;
+        }
+        return 0;
+      } catch (e) {
+        return 0;
+      }
+    }
+
+    function initializeTimelineWithAudio() {
+      // Set up timeline for audio scrubbing
+      console.log('Timeline initialized with audio scrubbing support');
+      console.log('Current audio language:', currentAudioLanguage);
+      
+      // Clear any existing timeline highlights
+      const historyItems = elements.subtitleHistory.querySelectorAll('.history-item');
+      historyItems.forEach(item => item.classList.remove('timeline-highlight'));
+      
+      // Show timeline controls if they exist
+      if (elements.timelineContainer) {
+        elements.timelineContainer.style.display = 'block';
+      }
+    }
+
+
 
 
 

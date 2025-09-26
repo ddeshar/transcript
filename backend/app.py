@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import json
 import os
@@ -89,7 +90,7 @@ class Settings(BaseSettings):
         alias="STATUS_INTERVAL_MS",
     )
     thai_politeness_gender: str = Field(
-        default="female",
+        default="neutral",
         alias="THAI_POLITENESS_GENDER",
     )
 
@@ -144,6 +145,33 @@ async def save_audio_to_file(
         return False
 
 
+async def save_thai_audio_to_file(
+    audio_base64: str, file_path: str, audio_format: str = "mp3"
+) -> bool:
+    """Save Thai TTS audio from base64 to file"""
+    try:
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        # Decode base64 audio
+        audio_bytes = base64.b64decode(audio_base64)
+        
+        # Determine file extension
+        if audio_format.lower() == "wav":
+            final_path = file_path.replace(".wav", "_thai.wav")
+        else:
+            final_path = file_path.replace(".wav", "_thai.mp3")
+        
+        # Save the audio file
+        with open(final_path, 'wb') as f:
+            f.write(audio_bytes)
+        
+        return True
+    except Exception as e:
+        print(f"Error saving Thai audio file {file_path}: {e}")
+        return False
+
+
 async def generate_thai_audio_placeholder(
     file_path: str, duration_ms: int, sample_rate: int = 16000
 ) -> bool:
@@ -168,6 +196,246 @@ async def generate_thai_audio_placeholder(
     except Exception as e:
         print(f"Error generating Thai audio placeholder {file_path}: {e}")
         return False
+
+
+async def render_final_audio_files(room_id: str, storage_path: str) -> dict:
+    """Render final audio files by concatenating all segments for a room"""
+    try:
+        room_path = os.path.join(storage_path, room_id)
+        if not os.path.exists(room_path):
+            return {"success": False, "error": "Room audio directory not found"}
+        
+        # Get all audio files
+        audio_files = []
+        for filename in sorted(os.listdir(room_path)):
+            if filename.endswith('.wav') or filename.endswith('.mp3'):
+                audio_files.append(os.path.join(room_path, filename))
+        
+        if not audio_files:
+            return {"success": False, "error": "No audio files found"}
+        
+        # Separate English and Thai audio files
+        english_files = [f for f in audio_files if '_en.wav' in f]
+        thai_files = [f for f in audio_files if '_th.wav' in f]
+        
+        final_files = {}
+        
+        # Render English audio
+        if english_files:
+            english_output = os.path.join(room_path, f"{room_id}_final_english.wav")
+            if await concatenate_wav_files(english_files, english_output):
+                final_files['english'] = english_output
+        
+        # Render Thai audio  
+        if thai_files:
+            thai_output = os.path.join(room_path, f"{room_id}_final_thai.wav")
+            if await concatenate_audio_files(thai_files, thai_output):
+                final_files['thai'] = thai_output
+        
+        return {
+            "success": True,
+            "files": final_files,
+            "total_segments": len(audio_files),
+            "english_segments": len(english_files),
+            "thai_segments": len(thai_files)
+        }
+    
+    except Exception as e:
+        print(f"Error rendering final audio files for room {room_id}: {e}")
+        return {"success": False, "error": str(e)}
+
+
+async def concatenate_wav_files(input_files: list, output_file: str) -> bool:
+    """Concatenate multiple WAV files into a single file"""
+    try:
+        if not input_files:
+            return False
+        
+        # Open first file to get parameters
+        with wave.open(input_files[0], 'rb') as first_wav:
+            params = first_wav.getparams()
+        
+        # Create output file with same parameters
+        with wave.open(output_file, 'wb') as output_wav:
+            output_wav.setparams(params)
+            
+            # Concatenate all input files
+            for input_file in input_files:
+                with wave.open(input_file, 'rb') as input_wav:
+                    frames = input_wav.readframes(input_wav.getnframes())
+                    output_wav.writeframes(frames)
+        
+        return True
+    except Exception as e:
+        print(f"Error concatenating WAV files: {e}")
+        return False
+
+
+async def concatenate_audio_files(input_files: list, output_file: str) -> bool:
+    """Concatenate mixed audio files (WAV/MP3) into a single WAV file"""
+    try:
+        if not input_files:
+            return False
+        
+        # Use ffmpeg if available, otherwise fallback to simple concatenation for WAV
+        wav_files = [f for f in input_files if f.endswith('.wav')]
+        
+        if len(wav_files) == len(input_files):
+            # All WAV files, use simple concatenation
+            return await concatenate_wav_files(input_files, output_file)
+        else:
+            # Mixed formats, create a simple WAV output for compatibility
+            # For now, create a placeholder final file
+            return await create_audio_placeholder(output_file, len(input_files) * 5000)  # 5 seconds per segment estimate
+    
+    except Exception as e:
+        print(f"Error concatenating mixed audio files: {e}")
+        return False
+
+
+async def create_audio_placeholder(file_path: str, duration_ms: int) -> bool:
+    """Create placeholder audio file"""
+    return await generate_thai_audio_placeholder(file_path, duration_ms)
+
+
+async def synthesize_thai_audio(
+    thai_text: str, file_path: str, sample_rate: int = 16000
+) -> bool:
+    """Synthesize Thai audio using TTS provider"""
+    try:
+        from .providers import create_tts_provider
+        from .providers.tts_base import TTSRequest
+        
+        if not thai_text.strip():
+            return False
+        
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        # Get TTS provider configuration
+        tts_provider_name = os.getenv("TTS_PROVIDER", "mock")
+        
+        # Skip synthesis for disabled or mock providers
+        if tts_provider_name in ["disabled", "mock"]:
+            return await generate_thai_audio_placeholder(
+                file_path, 2000, sample_rate
+            )
+        
+        # Create TTS provider
+        tts_provider = create_tts_provider(tts_provider_name)
+        await tts_provider.setup()
+        
+        # Configure Thai voice based on provider
+        voice_id = "alloy"  # Default fallback
+        if tts_provider_name == "google":
+            # Use high-quality Thai neural voice
+            voice_id = "th-TH-Neural2-A"  # Female Thai voice
+        elif tts_provider_name == "aws_polly":
+            voice_id = "Naja"  # Thai female voice
+        elif tts_provider_name == "openai":
+            voice_id = "nova"  # OpenAI voice (multilingual)
+        
+        # Create TTS request
+        tts_request = TTSRequest(
+            text=thai_text,
+            voice_id=voice_id,
+            speed=float(os.getenv("TTS_SPEED", "1.0")),
+            language="th"
+        )
+        
+        # Synthesize speech
+        result = await tts_provider.synthesize(tts_request)
+        
+        if result.success and result.audio_data:
+            # Save audio data to file
+            with open(file_path, 'wb') as f:
+                f.write(result.audio_data)
+            
+            jsonify_log("INFO", {
+                "message": "✅ Thai audio synthesized",
+                "file_path": file_path,
+                "text_length": len(thai_text),
+                "voice": result.voice_used,
+                "duration_ms": result.duration_ms
+            })
+            return True
+        else:
+            error_msg = (
+                result.error_message if hasattr(result, 'error_message')
+                else "Unknown error"
+            )
+            jsonify_log("WARNING", {
+                "message": "❌ TTS synthesis failed, using placeholder",
+                "text": thai_text[:50] + "...",
+                "error": error_msg
+            })
+            # Fallback to placeholder
+            return await generate_thai_audio_placeholder(
+                file_path, 2000, sample_rate
+            )
+        
+    except Exception as e:
+        jsonify_log("ERROR", {
+            "message": "💥 Exception in Thai audio synthesis",
+            "error": str(e),
+            "text": thai_text[:50] + "..."
+        })
+        # Fallback to placeholder
+        return await generate_thai_audio_placeholder(
+            file_path, 2000, sample_rate
+        )
+
+
+async def synthesize_thai_audio_base64(thai_text: str) -> Optional[str]:
+    """Synthesize Thai audio and return as base64 for WebSocket streaming"""
+    try:
+        from .providers import create_tts_provider
+        from .providers.tts_base import TTSRequest
+        import base64
+        
+        if not thai_text.strip():
+            return None
+        
+        # Get TTS provider configuration
+        tts_provider_name = os.getenv("TTS_PROVIDER", "mock")
+        
+        # Skip synthesis for disabled or mock providers
+        if tts_provider_name in ["disabled", "mock"]:
+            return None
+        
+        # Create TTS provider
+        tts_provider = create_tts_provider(tts_provider_name)
+        await tts_provider.setup()
+        
+        # Configure voice
+        voice_id = "nova"  # Default for streaming
+        if tts_provider_name == "aws_polly":
+            voice_id = "Naja"  # Thai female voice
+        
+        # Create TTS request
+        tts_request = TTSRequest(
+            text=thai_text,
+            voice_id=voice_id,
+            speed=float(os.getenv("OPENAI_TTS_SPEED", "1.0")),
+            language="th"
+        )
+        
+        # Synthesize speech
+        result = await tts_provider.synthesize(tts_request)
+        
+        if result.success and result.audio_data:
+            # Return audio as base64
+            audio_base64 = base64.b64encode(result.audio_data).decode()
+            return audio_base64
+        else:
+            return None
+            
+    except Exception as e:
+        jsonify_log("ERROR", {
+            "message": "Failed to synthesize audio for streaming",
+            "error": str(e),
+            "text": thai_text[:50] + "..."
+        })
+        return None
 
 
 async def get_room_audio_files(storage_path: str, room_id: str) -> list[dict]:
@@ -1018,16 +1286,8 @@ async def get_tts_voices() -> JSONResponse:
     try:
         from .providers import create_tts_provider
         
-        settings_dict = {
-            "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
-            "OPENAI_TTS_MODEL": os.getenv("OPENAI_TTS_MODEL", "tts-1"),
-            "AWS_ACCESS_KEY_ID": os.getenv("AWS_ACCESS_KEY_ID"),
-            "AWS_SECRET_ACCESS_KEY": os.getenv("AWS_SECRET_ACCESS_KEY"),
-            "AWS_REGION": os.getenv("AWS_REGION", "us-east-1"),
-        }
-        
         tts_provider_name = os.getenv("TTS_PROVIDER", "mock")
-        tts_provider = create_tts_provider(tts_provider_name, **settings_dict)
+        tts_provider = create_tts_provider(tts_provider_name)
         
         await tts_provider.setup()
         voices = tts_provider.get_available_voices()
@@ -1080,16 +1340,8 @@ async def synthesize_speech(request: dict) -> JSONResponse:
             )
         
         # Create TTS provider
-        settings_dict = {
-            "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
-            "OPENAI_TTS_MODEL": os.getenv("OPENAI_TTS_MODEL", "tts-1"),
-            "AWS_ACCESS_KEY_ID": os.getenv("AWS_ACCESS_KEY_ID"),
-            "AWS_SECRET_ACCESS_KEY": os.getenv("AWS_SECRET_ACCESS_KEY"),
-            "AWS_REGION": os.getenv("AWS_REGION", "us-east-1"),
-        }
-        
         tts_provider_name = os.getenv("TTS_PROVIDER", "mock")
-        tts_provider = create_tts_provider(tts_provider_name, **settings_dict)
+        tts_provider = create_tts_provider(tts_provider_name)
         
         await tts_provider.setup()
         
@@ -1141,6 +1393,53 @@ async def synthesize_speech(request: dict) -> JSONResponse:
             status_code=500,
             content={
                 "error": "Failed to synthesize speech",
+                "details": str(e)
+            }
+        )
+
+
+@app.post("/api/audio/render")
+async def render_room_audio(
+    request: dict,
+    current_user: dict = Depends(get_current_user_dep)
+) -> JSONResponse:
+    """Render final audio files for a room session"""
+    try:
+        room_id = request.get("room_id")
+        if not room_id:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "room_id is required"}
+            )
+        
+        # Render final audio files
+        result = await render_final_audio_files(room_id, settings.audio_storage_path)
+        
+        if result["success"]:
+            return JSONResponse({
+                "status": "success",
+                "message": "Audio files rendered successfully",
+                "files": result["files"],
+                "statistics": {
+                    "total_segments": result["total_segments"],
+                    "english_segments": result["english_segments"],
+                    "thai_segments": result["thai_segments"]
+                }
+            })
+        else:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": "Failed to render audio files",
+                    "details": result["error"]
+                }
+            )
+    
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Audio rendering failed",
                 "details": str(e)
             }
         )
@@ -1787,10 +2086,40 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             "mt": "built_in",
                         },
                     }
+                    
+                    # Add Thai audio synthesis for final results
+                    if result.is_final and thai_text:
+                        try:
+                            audio_data = await synthesize_thai_audio_base64(thai_text)
+                            if audio_data:
+                                message["audio"] = {
+                                    "thai_audio_base64": audio_data,
+                                    "audio_format": "mp3",
+                                    "voice": "nova"
+                                }
+                                
+                                # Save Thai audio to file for timeline
+                                segment_id = result.segment_id or \
+                                    f"{sess_id}-{result.end_ms}"
+                                audio_file_path = get_audio_file_path(
+                                    settings.audio_storage_path, sess_id,
+                                    hash(segment_id) % 1000000, "thai"
+                                )
+                                await save_thai_audio_to_file(
+                                    audio_data, audio_file_path, "mp3"
+                                )
+                                
+                        except Exception as e:
+                            jsonify_log("WARNING", {
+                                "message": "Failed to add audio to message",
+                                "error": str(e)
+                            })
                 else:
                     # Use MT provider for translation
                     await send({"type": "status", "status": "translating"})
-                    translation = await MT_PROVIDER.translate(english_text, is_final=result.is_final)
+                    translation = await MT_PROVIDER.translate(
+                        english_text, is_final=result.is_final
+                    )
                     message = {
                         "type": "partial" if not result.is_final else "final",
                         "sessionId": sess_id,
@@ -1803,6 +2132,36 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             "mt": translation.provider,
                         },
                     }
+                    
+                    # Add Thai audio synthesis for final results
+                    if result.is_final and translation.text:
+                        try:
+                            audio_data = await synthesize_thai_audio_base64(
+                                translation.text
+                            )
+                            if audio_data:
+                                message["audio"] = {
+                                    "thai_audio_base64": audio_data,
+                                    "audio_format": "mp3",
+                                    "voice": "nova"
+                                }
+                                
+                                # Save Thai audio to file for timeline
+                                segment_id = result.segment_id or \
+                                    f"{sess_id}-{result.end_ms}"
+                                audio_file_path = get_audio_file_path(
+                                    settings.audio_storage_path, sess_id,
+                                    hash(segment_id) % 1000000, "thai"
+                                )
+                                await save_thai_audio_to_file(
+                                    audio_data, audio_file_path, "mp3"
+                                )
+                                
+                        except Exception as e:
+                            jsonify_log("WARNING", {
+                                "message": "Failed to add audio to message",
+                                "error": str(e)
+                            })
                 await send(message)
                 # Broadcast to any registered followers for this session
                 followers = SESSION_FOLLOWERS.get(sess_id)
@@ -1881,11 +2240,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                     500, min(10000, estimated_duration_ms)
                                 )
                                 
-                                # Generate placeholder Thai audio
+                                # Synthesize Thai audio using TTS
                                 thai_audio_saved = await (
-                                    generate_thai_audio_placeholder(
+                                    synthesize_thai_audio(
+                                        message.get("thai", ""),
                                         thai_audio_file_path,
-                                        estimated_duration_ms,
                                         state.sample_rate
                                     )
                                 )
