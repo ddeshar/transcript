@@ -308,15 +308,16 @@
       border-bottom: 1px solid var(--border-color);
     }
 
-    .current-subtitle-text {
+    .current-subtitle {
       background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
       border-radius: 12px;
       padding: 1.5rem;
       margin-bottom: 1rem;
       border-left: 4px solid var(--accent-gradient);
+      border: 2px solid var(--border-color);
     }
 
-    .subtitle-thai {
+    .current-thai {
       font-family: 'Noto Sans Thai', sans-serif;
       font-size: 1.25rem;
       font-weight: 600;
@@ -325,10 +326,30 @@
       color: var(--text-primary);
     }
 
-    .subtitle-english {
+    .current-english {
       font-size: 1rem;
       color: var(--text-secondary);
       line-height: 1.5;
+    }
+
+    /* No Subtitle Message */
+    .no-subtitle {
+      text-align: center;
+      color: var(--text-muted);
+      font-style: italic;
+      opacity: 0.6;
+      padding: 1rem;
+    }
+
+    .no-subtitle i {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+      opacity: 0.4;
+    }
+
+    .no-subtitle p {
+      margin: 0;
+      font-size: 0.9rem;
     }
 
     /* Audio Status */
@@ -619,6 +640,187 @@
       }
     }
 
+    /* Subtitle Controls */
+    .subtitle-controls {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    #fullscreenBtn {
+      padding: 0.5rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      transition: all 0.2s ease;
+      min-width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #fullscreenBtn:hover {
+      background: var(--bg-hover);
+      border-color: var(--accent-color);
+      transform: translateY(-1px);
+    }
+
+    #fullscreenBtn i {
+      font-size: 0.9rem;
+      transition: transform 0.2s ease;
+    }
+
+    /* Subtitle History */
+    .subtitle-history {
+      margin-top: 2rem;
+      border-top: 2px solid var(--border-color);
+      padding-top: 1.5rem;
+    }
+
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .history-header h3 {
+      margin: 0;
+      color: var(--text-primary);
+      font-size: 1.1rem;
+    }
+
+    .history-count {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .history-items {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: var(--bg-secondary);
+    }
+
+    .history-item {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border-color);
+      transition: background-color 0.2s ease;
+      cursor: pointer;
+    }
+
+    .history-item:hover {
+      background: var(--bg-hover);
+      transform: translateX(2px);
+    }
+
+    .history-item:last-child {
+      border-bottom: none;
+    }
+
+    .history-time {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .history-thai {
+      color: var(--text-primary);
+      font-family: 'Noto Sans Thai', sans-serif;
+      font-size: 1rem;
+      margin-bottom: 0.3rem;
+      line-height: 1.4;
+    }
+
+    .history-english {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      line-height: 1.3;
+    }
+
+    /* Fullscreen Mode */
+    .current-subtitles-panel.fullscreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1000;
+      background: var(--bg-dark);
+      display: flex;
+      flex-direction: column;
+      padding: 2rem;
+    }
+
+    .current-subtitles-panel.fullscreen .current-subtitles-header {
+      padding-bottom: 1rem;
+      border-bottom: 2px solid var(--border-color);
+      margin-bottom: 2rem;
+    }
+
+    .current-subtitles-panel.fullscreen .current-subtitles-header h2 {
+      font-size: 1.5rem;
+    }
+
+    .current-subtitles-panel.fullscreen .current-subtitle {
+      min-height: 30vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      margin-bottom: 2rem;
+      border-bottom: 2px solid var(--border-color);
+      padding-bottom: 2rem;
+    }
+
+    .current-subtitles-panel.fullscreen .current-thai {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .current-subtitles-panel.fullscreen .current-english {
+      font-size: 1.8rem;
+    }
+
+    .current-subtitles-panel.fullscreen .subtitle-history {
+      flex: 1;
+      margin-top: 0;
+      border-top: none;
+      padding-top: 0;
+    }
+
+    .current-subtitles-panel.fullscreen .history-items {
+      max-height: none;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    .current-subtitles-panel.fullscreen .history-item {
+      padding: 1.5rem;
+    }
+
+    .current-subtitles-panel.fullscreen .history-thai {
+      font-size: 1.4rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .current-subtitles-panel.fullscreen .history-english {
+      font-size: 1.2rem;
+    }
+
+    .current-subtitles-panel.fullscreen .history-time {
+      font-size: 1rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .current-subtitles-panel.fullscreen #fullscreenBtn i {
+      transform: rotate(0deg);
+    }
+
 
   </style>
 </head>
@@ -780,21 +982,33 @@
             <i class="fas fa-comments"></i>
             Current Subtitles
           </h2>
-          <div class="info-label" id="lastUpdate">Last update: --:--</div>
-        </div>
-
-        <div class="current-subtitle-text">
-          <div class="subtitle-thai" id="currentThai">
-            <!-- Thai subtitles will appear here during live session -->
-          </div>
-          <div class="subtitle-english" id="currentEnglish">
-            <!-- English subtitles will appear here during live session -->
+          <div class="subtitle-controls">
+            <button id="fullscreenBtn" class="btn btn-secondary" onclick="toggleFullscreen()" title="Toggle Fullscreen">
+              <i class="fas fa-expand"></i>
+            </button>
+            <div class="info-label" id="lastUpdate">Last update: --:--</div>
           </div>
         </div>
 
-        <div class="no-subtitle" id="noSubtitleMessage" style="display: none;">
-          <i class="fas fa-microphone-slash" style="font-size: 3rem; opacity: 0.3; margin-bottom: 1rem;"></i>
-          <p style="color: var(--text-muted); font-style: italic;">Start speaking to begin transcription...</p>
+        <!-- Current (Latest) Subtitle -->
+        <div class="current-subtitle" id="currentSubtitle">
+          <div class="no-subtitle" id="noSubtitleMessage">
+            <i class="fas fa-microphone-alt"></i>
+            <p>Ready for transcription</p>
+          </div>
+          <div class="current-thai" id="currentThai" style="display: block;"></div>
+          <div class="current-english" id="currentEnglish" style="display: block;"></div>
+        </div>
+
+        <!-- Subtitle History -->
+        <div class="subtitle-history" id="subtitleHistory">
+          <div class="history-header">
+            <h3>Subtitle History</h3>
+            <div class="history-count" id="historyCount">0 items</div>
+          </div>
+          <div class="history-items" id="historyItems">
+            <!-- Historical subtitle items will be added here -->
+          </div>
         </div>
       </section>
     </main>
@@ -878,6 +1092,45 @@
     let segmentCounter = 0;
     let startTime = null;
 
+    // Load historical subtitles for presenter
+    async function loadHistoricalSubtitles() {
+      try {
+        const response = await fetch(`/api/rooms/${roomId}/subtitles`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`Loading ${data.total_segments} historical subtitle segments for presenter`);
+          
+          if (data.subtitles && data.subtitles.length > 0) {
+            // Sort subtitles by timestamp to ensure proper order
+            const sortedSubtitles = data.subtitles.sort((a, b) => a.startMs - b.startMs);
+            
+            // Show the most recent subtitle as current for presenter
+            const mostRecent = sortedSubtitles[sortedSubtitles.length - 1];
+            if (mostRecent.thai || mostRecent.text) {
+              updateCurrentSubtitles({
+                thai: mostRecent.thai,
+                english: mostRecent.text
+              }, true);
+              
+              // Update last update time
+              if (elements.lastUpdate) {
+                const timeStamp = new Date(mostRecent.startMs || Date.now());
+                elements.lastUpdate.textContent = `Last update: ${timeStamp.toLocaleTimeString()}`;
+              }
+              
+              console.log('Presenter historical subtitles loaded successfully');
+            }
+          } else {
+            console.log('No historical subtitles found for presenter');
+          }
+        } else {
+          console.error('Failed to fetch subtitles for presenter:', response.status);
+        }
+      } catch (error) {
+        console.error('Failed to load historical subtitles for presenter:', error);
+      }
+    }
+
     // Initialize
     async function init() {
       try {
@@ -895,6 +1148,9 @@
         initializeAudioStatus();
         await checkMicrophoneAccess();
         startPeriodicUpdates();
+        
+        // Load historical subtitles to show presenter where they left off
+        await loadHistoricalSubtitles();
       } catch (error) {
         console.error('Failed to load room:', error);
         if (elements.roomTitle) {
@@ -1164,14 +1420,29 @@
     }
 
     function updateCurrentSubtitles(data, isFinal) {
+      const hasContent = data.thai || data.english;
+      
       if (data.thai) {
         elements.currentThai.textContent = data.thai;
         elements.currentThai.style.opacity = isFinal ? '1' : '0.7';
+        elements.currentThai.style.display = 'block';
       }
       
       if (data.english) {
         elements.currentEnglish.textContent = data.english;
         elements.currentEnglish.style.opacity = isFinal ? '1' : '0.7';
+        elements.currentEnglish.style.display = 'block';
+      }
+
+      // Show/hide no subtitle message based on content
+      const noSubtitleMsg = document.getElementById('noSubtitleMessage');
+      if (noSubtitleMsg) {
+        noSubtitleMsg.style.display = hasContent ? 'none' : 'block';
+      }
+
+      // Add to history if final
+      if (isFinal && hasContent) {
+        addToSubtitleHistory(data.thai || '', data.english || '');
       }
     }
 
@@ -1460,6 +1731,147 @@
       const byteArray = new Uint8Array(byteNumbers);
       return new Blob([byteArray], { type: mimeType });
     }
+
+    // Subtitle History Functions
+    let subtitleHistory = [];
+
+    function addToSubtitleHistory(thai, english) {
+      const timestamp = new Date();
+      const historyItem = {
+        thai: thai,
+        english: english,
+        timestamp: timestamp.toLocaleTimeString()
+      };
+      
+      subtitleHistory.unshift(historyItem); // Add to beginning
+      
+      // Keep only last 50 items
+      if (subtitleHistory.length > 50) {
+        subtitleHistory = subtitleHistory.slice(0, 50);
+      }
+      
+      updateHistoryDisplay();
+    }
+
+    function updateHistoryDisplay() {
+      const historyItems = document.getElementById('historyItems');
+      const historyCount = document.getElementById('historyCount');
+      
+      historyCount.textContent = `${subtitleHistory.length} items`;
+      
+      historyItems.innerHTML = '';
+      
+      subtitleHistory.forEach(item => {
+        const historyDiv = document.createElement('div');
+        historyDiv.className = 'history-item';
+        historyDiv.innerHTML = `
+          <div class="history-time">${item.timestamp}</div>
+          <div class="history-thai">${item.thai}</div>
+          <div class="history-english">${item.english}</div>
+        `;
+        
+        // Add click handler to show this subtitle as current
+        historyDiv.addEventListener('click', function() {
+          elements.currentThai.textContent = item.thai;
+          elements.currentEnglish.textContent = item.english;
+          elements.currentThai.style.opacity = '1';
+          elements.currentEnglish.style.opacity = '1';
+          
+          // Hide no subtitle message
+          const noSubtitleMsg = document.getElementById('noSubtitleMessage');
+          if (noSubtitleMsg) {
+            noSubtitleMsg.style.display = 'none';
+          }
+        });
+        
+        historyItems.appendChild(historyDiv);
+      });
+    }
+
+    function loadHistoricalSubtitles() {
+      console.log('Loading historical subtitles for presenter...');
+      
+      fetch(`/api/rooms/${roomId}/subtitles`)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log('Historical subtitles loaded:', data.total_segments);
+          
+          // Clear existing history
+          subtitleHistory = [];
+          
+          // Add historical items (data.subtitles contains the array)
+          if (data.subtitles && data.subtitles.length > 0) {
+            data.subtitles.forEach(item => {
+              const timestamp = new Date(item.startMs);
+              subtitleHistory.push({
+                thai: item.thai || '',
+                english: item.text || '',
+                timestamp: timestamp.toLocaleTimeString()
+              });
+            });
+          }
+          
+          // Show most recent subtitle in current display
+          const noSubtitleMsg = document.getElementById('noSubtitleMessage');
+          if (subtitleHistory.length > 0) {
+            const latest = subtitleHistory[0];
+            elements.currentThai.textContent = latest.thai;
+            elements.currentEnglish.textContent = latest.english;
+            elements.currentThai.style.opacity = '1';
+            elements.currentEnglish.style.opacity = '1';
+            elements.currentThai.style.display = 'block';
+            elements.currentEnglish.style.display = 'block';
+            
+            // Hide no subtitle message when there's content
+            if (noSubtitleMsg && (latest.thai || latest.english)) {
+              noSubtitleMsg.style.display = 'none';
+            }
+          } else {
+            // Show no subtitle message when there's no history
+            if (noSubtitleMsg) {
+              noSubtitleMsg.style.display = 'block';
+            }
+          }
+          
+          updateHistoryDisplay();
+        })
+        .catch(error => {
+          console.error('Error loading historical subtitles:', error);
+        });
+    }
+
+    // Fullscreen Functions
+    function toggleFullscreen() {
+      const panel = document.querySelector('.current-subtitles-panel');
+      const btn = document.getElementById('fullscreenBtn');
+      
+      if (panel.classList.contains('fullscreen')) {
+        // Exit fullscreen
+        panel.classList.remove('fullscreen');
+        btn.innerHTML = '<i class="fas fa-expand"></i>';
+        btn.title = 'Enter Fullscreen';
+      } else {
+        // Enter fullscreen
+        panel.classList.add('fullscreen');
+        btn.innerHTML = '<i class="fas fa-compress"></i>';
+        btn.title = 'Exit Fullscreen';
+      }
+    }
+
+    // ESC key to exit fullscreen
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'Escape') {
+        const panel = document.querySelector('.current-subtitles-panel');
+        if (panel && panel.classList.contains('fullscreen')) {
+          toggleFullscreen();
+        }
+      }
+    });
 
     // Start the application
     init();
