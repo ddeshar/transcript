@@ -4,7 +4,6 @@ from pathlib import Path
 
 from .asr_base import ASRProvider
 from .asr_cloud import WhisperCloudASRProvider
-from .asr_whisper_gpt import WhisperGPTProvider
 from .asr_mock import MockASRProvider
 from .mt_base import MTProvider
 from .mt_gtranslate import GoogleTranslateProvider
@@ -84,64 +83,18 @@ def create_asr_provider(
     name = name.lower()
     if name == "mock":
         return MockASRProvider()
-    if name == "vosk":
-        if not VOSK_AVAILABLE:
-            raise RuntimeError("Vosk not available. Install with: pip install vosk")
-        model_dir = Path(
-            settings.get("VOSK_MODEL_DIR", base_dir / "models" / "vosk")
-        )
-        model_name = settings.get("VOSK_MODEL_NAME")
-        return VoskASRProvider(model_dir=model_dir, model_name=model_name)
-    if name == "whispercpp":
-        if not WHISPERCPP_AVAILABLE:
-            raise RuntimeError("WhisperCpp not available.")
-        model_path = Path(
-            settings.get(
-                "WHISPER_CPP_MODEL_PATH",
-                base_dir / "models" / "whisper.cpp" / "ggml-small.en.bin",
-            )
-        )
-        return WhisperCppASRProvider(model_path=model_path)
-    if name == "faster_whisper":
-        if not FASTER_WHISPER_AVAILABLE:
-            raise RuntimeError("Faster-whisper not available.")
-        model_size = settings.get("FASTER_WHISPER_MODEL", "small")
-        device = settings.get("FASTER_WHISPER_DEVICE", "cpu")
-        compute_type = settings.get("FASTER_WHISPER_COMPUTE_TYPE", "int8")
-        language = settings.get("FASTER_WHISPER_LANGUAGE", "en")
-        beam_size = int(settings.get("FASTER_WHISPER_BEAM_SIZE", "1"))
-        chunk_duration = float(
-            settings.get("FASTER_WHISPER_CHUNK_DURATION", "2.0")
-        )
-        return FasterWhisperASRProvider(
-            model_size=model_size,
-            device=device,
-            compute_type=compute_type,
-            language=language,
-            beam_size=beam_size,
-            chunk_duration=chunk_duration,
-        )
+    # Handle removed providers with helpful error messages
+    if name in ["vosk", "whispercpp", "faster_whisper"]:
+        raise ValueError(f"Provider '{name}' removed: unreliable offline")
+    if name == "whisper_gpt":
+        raise ValueError("Provider 'whisper_gpt' removed: broken streaming")
+    if name in ["whisper_local", "hybrid"]:
+        raise ValueError(f"Provider '{name}' removed: depends on offline")
+    
     if name == "whisper_api":
         return WhisperCloudASRProvider(
             api_key=settings.get("OPENAI_API_KEY"),
             model=settings.get("OPENAI_WHISPER_MODEL", "whisper-1"),
-        )
-    if name == "whisper_gpt":
-        return WhisperGPTProvider(
-            api_key=settings.get("OPENAI_API_KEY"),
-            whisper_model=settings.get("OPENAI_WHISPER_MODEL", "whisper-1"),
-            gpt_model=settings.get("OPENAI_GPT_MODEL", "gpt-3.5-turbo"),
-        )
-    if name == "whisper_local":
-        model_size = settings.get("WHISPER_MODEL_SIZE", "base")
-        device = settings.get("WHISPER_DEVICE", "cpu")
-        chunk_duration = float(
-            settings.get("WHISPER_CHUNK_DURATION", "2.0")
-        )
-        return WhisperLocalProvider(
-            model_size=model_size,
-            device=device,
-            chunk_duration=chunk_duration,
         )
     if name == "gpt_realtime":
         return GPTRealtimeProvider(
@@ -150,33 +103,6 @@ def create_asr_provider(
     if name == "gpt_4o_audio":
         return GPT4oAudioProvider(
             api_key=settings.get("OPENAI_API_KEY"),
-        )
-    if name == "hybrid":
-        # Create fast provider (faster-whisper)
-        fast_provider = FasterWhisperASRProvider(
-            model_size=settings.get("FASTER_WHISPER_MODEL", "tiny"),
-            device=settings.get("FASTER_WHISPER_DEVICE", "cpu"),
-            compute_type=settings.get("FASTER_WHISPER_COMPUTE_TYPE", "int8"),
-            language=settings.get("FASTER_WHISPER_LANGUAGE", "en"),
-            beam_size=int(settings.get("FASTER_WHISPER_BEAM_SIZE", "1")),
-            chunk_duration=float(
-                settings.get("FASTER_WHISPER_CHUNK_DURATION", "1.0")
-            ),
-        )
-        
-        # Create quality provider (whisper API + GPT) if API key available
-        quality_provider = None
-        if settings.get("OPENAI_API_KEY"):
-            quality_provider = WhisperGPTProvider(
-                api_key=settings.get("OPENAI_API_KEY"),
-                whisper_model=settings.get("OPENAI_WHISPER_MODEL", "whisper-1"),
-                gpt_model=settings.get("OPENAI_GPT_MODEL", "gpt-3.5-turbo"),
-            )
-        
-        return HybridASRProvider(
-            fast_provider=fast_provider,
-            quality_provider=quality_provider,
-            enable_quality=quality_provider is not None,
         )
     raise ValueError(f"Unsupported ASR provider: {name}")
 
