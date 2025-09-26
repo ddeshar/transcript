@@ -24,8 +24,8 @@ share/python-wheels/
 MANIFEST
 
 # Virtual environments
-.env
-.env.docker
+.env*
+!.env.template
 .venv
 env/
 venv/
@@ -123,11 +123,7 @@ logs/
 # Generated transcripts
 subtitles/
 
-# Environment files
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Environment files (handled by .env* pattern above)
 
 # Database
 *.db

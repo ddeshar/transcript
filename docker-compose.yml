@@ -64,7 +64,7 @@ services:
       dockerfile: docker/Dockerfile.backend
     container_name: en-th-subtitles
     env_file:
-      - ./.env.docker
+      - ./.env
     ports:
       - "8000:8000"
     volumes:
@@ -75,7 +75,7 @@ services:
       - ./media:/app/media
       - ./logs:/app/logs
       - ./backups:/app/backups
-      - ./.env.docker:/app/.env
+      - ./.env:/app/.env
     depends_on:
       db:
         condition: service_healthy
