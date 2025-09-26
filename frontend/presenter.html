@@ -30,6 +30,12 @@
       --border-color: #374151;
       --glass-bg: rgba(26, 31, 46, 0.8);
       --glass-border: rgba(255, 255, 255, 0.1);
+      --accent-color: #667eea;
+      --bg-secondary: #2d3142;
+      --bg-hover: rgba(102, 126, 234, 0.1);
+      --font-scale: 1;
+      --thai-font-size: 1.25rem;
+      --english-font-size: 1rem;
     }
 
     body {
@@ -319,7 +325,7 @@
 
     .current-thai {
       font-family: 'Noto Sans Thai', sans-serif;
-      font-size: 1.25rem;
+      font-size: calc(var(--thai-font-size) * var(--font-scale));
       font-weight: 600;
       line-height: 1.4;
       margin-bottom: 0.75rem;
@@ -327,7 +333,7 @@
     }
 
     .current-english {
-      font-size: 1rem;
+      font-size: calc(var(--english-font-size) * var(--font-scale));
       color: var(--text-secondary);
       line-height: 1.5;
     }
@@ -684,6 +690,8 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 1rem;
+      flex-wrap: wrap;
+      gap: 1rem;
     }
 
     .history-header h3 {
@@ -692,9 +700,90 @@
       font-size: 1.1rem;
     }
 
+    .history-controls {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .search-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-input {
+      padding: 0.4rem 2rem 0.4rem 0.75rem;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      width: 180px;
+      transition: border-color 0.2s ease;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--accent-color);
+    }
+
+    .search-icon {
+      position: absolute;
+      right: 0.5rem;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    .font-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.25rem 0.5rem;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+    }
+
+    .font-controls span {
+      min-width: 40px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-primary);
+    }
+
+    .export-controls {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .btn-sm {
+      padding: 0.3rem 0.5rem;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-sm:hover {
+      background: var(--bg-hover);
+      border-color: var(--accent-color);
+    }
+
+    .btn-sm.active {
+      background: var(--accent-color);
+      color: white;
+      border-color: var(--accent-color);
+    }
+
     .history-count {
       color: var(--text-muted);
       font-size: 0.9rem;
+      white-space: nowrap;
     }
 
     .history-items {
@@ -1004,7 +1093,36 @@
         <div class="subtitle-history" id="subtitleHistory">
           <div class="history-header">
             <h3>Subtitle History</h3>
-            <div class="history-count" id="historyCount">0 items</div>
+            <div class="history-controls">
+              <div class="search-container">
+                <input type="text" id="historySearch" placeholder="Search subtitles..." class="search-input">
+                <i class="fas fa-search search-icon"></i>
+              </div>
+              <div class="font-controls">
+                <button id="fontSizeDecrease" class="btn btn-sm" title="Decrease Font Size">
+                  <i class="fas fa-minus"></i>
+                </button>
+                <span id="fontSizeDisplay">100%</span>
+                <button id="fontSizeIncrease" class="btn btn-sm" title="Increase Font Size">
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
+              <div class="export-controls">
+                <button id="exportTxt" class="btn btn-sm" title="Export as TXT">
+                  <i class="fas fa-file-alt"></i>
+                </button>
+                <button id="exportPdf" class="btn btn-sm" title="Export as PDF">
+                  <i class="fas fa-file-pdf"></i>
+                </button>
+                <button id="exportSrt" class="btn btn-sm" title="Export as SRT">
+                  <i class="fas fa-closed-captioning"></i>
+                </button>
+              </div>
+              <button id="autoScrollToggle" class="btn btn-sm active" title="Toggle Auto-scroll">
+                <i class="fas fa-scroll"></i>
+              </button>
+              <div class="history-count" id="historyCount">0 items</div>
+            </div>
           </div>
           <div class="history-items" id="historyItems">
             <!-- Historical subtitle items will be added here -->
@@ -1734,6 +1852,9 @@
 
     // Subtitle History Functions
     let subtitleHistory = [];
+    let isAutoScrollEnabled = true;
+    let currentFontScale = 100;
+    let filteredHistory = [];
 
     function addToSubtitleHistory(thai, english) {
       const timestamp = new Date();
@@ -1863,19 +1984,292 @@
       }
     }
 
-    // ESC key to exit fullscreen
+    // Keyboard shortcuts
     document.addEventListener('keydown', function(event) {
+      // ESC key to exit fullscreen
       if (event.key === 'Escape') {
         const panel = document.querySelector('.current-subtitles-panel');
         if (panel && panel.classList.contains('fullscreen')) {
           toggleFullscreen();
         }
       }
+      
+      // F key for fullscreen toggle
+      if (event.key === 'f' || event.key === 'F') {
+        if (!event.ctrlKey && !event.metaKey && document.activeElement.tagName !== 'INPUT') {
+          event.preventDefault();
+          toggleFullscreen();
+        }
+      }
+      
+      // Ctrl+F for search focus
+      if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
+        event.preventDefault();
+        const searchInput = document.getElementById('historySearch');
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        }
+      }
     });
+
+    // Advanced Features Implementation
+    
+    // Search Functionality
+    function initializeSearch() {
+      const searchInput = document.getElementById('historySearch');
+      if (searchInput) {
+        searchInput.addEventListener('input', function(e) {
+          const query = e.target.value.toLowerCase().trim();
+          filterHistory(query);
+        });
+      }
+    }
+    
+    function filterHistory(query) {
+      if (!query) {
+        filteredHistory = [...subtitleHistory];
+      } else {
+        filteredHistory = subtitleHistory.filter(item => 
+          (item.thai && item.thai.toLowerCase().includes(query)) ||
+          (item.english && item.english.toLowerCase().includes(query))
+        );
+      }
+      updateHistoryDisplay();
+    }
+    
+    // Font Size Controls
+    function initializeFontControls() {
+      const decreaseBtn = document.getElementById('fontSizeDecrease');
+      const increaseBtn = document.getElementById('fontSizeIncrease');
+      const display = document.getElementById('fontSizeDisplay');
+      
+      if (decreaseBtn) {
+        decreaseBtn.addEventListener('click', () => {
+          currentFontScale = Math.max(70, currentFontScale - 10);
+          updateFontSize();
+        });
+      }
+      
+      if (increaseBtn) {
+        increaseBtn.addEventListener('click', () => {
+          currentFontScale = Math.min(150, currentFontScale + 10);
+          updateFontSize();
+        });
+      }
+    }
+    
+    function updateFontSize() {
+      const display = document.getElementById('fontSizeDisplay');
+      if (display) {
+        display.textContent = currentFontScale + '%';
+      }
+      
+      // Apply font scaling
+      const root = document.documentElement;
+      root.style.setProperty('--font-scale', currentFontScale / 100);
+      
+      // Update CSS custom properties
+      const thaiSize = 1.25 * (currentFontScale / 100);
+      const englishSize = 1.0 * (currentFontScale / 100);
+      root.style.setProperty('--thai-font-size', thaiSize + 'rem');
+      root.style.setProperty('--english-font-size', englishSize + 'rem');
+    }
+    
+    // Auto-scroll Toggle
+    function initializeAutoScroll() {
+      const toggleBtn = document.getElementById('autoScrollToggle');
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+          isAutoScrollEnabled = !isAutoScrollEnabled;
+          toggleBtn.classList.toggle('active', isAutoScrollEnabled);
+          toggleBtn.title = isAutoScrollEnabled ? 'Disable Auto-scroll' : 'Enable Auto-scroll';
+        });
+      }
+    }
+    
+    // Export Functions
+    function initializeExports() {
+      const txtBtn = document.getElementById('exportTxt');
+      const pdfBtn = document.getElementById('exportPdf');
+      const srtBtn = document.getElementById('exportSrt');
+      
+      if (txtBtn) txtBtn.addEventListener('click', () => exportTranscript('txt'));
+      if (pdfBtn) pdfBtn.addEventListener('click', () => exportTranscript('pdf'));
+      if (srtBtn) srtBtn.addEventListener('click', () => exportTranscript('srt'));
+    }
+    
+    function exportTranscript(format) {
+      const roomTitle = roomData?.title || 'Transcript';
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `${roomTitle}_${timestamp}`;
+      
+      switch (format) {
+        case 'txt':
+          exportAsTxt(filename);
+          break;
+        case 'pdf':
+          exportAsPdf(filename);
+          break;
+        case 'srt':
+          exportAsSrt(filename);
+          break;
+      }
+    }
+    
+    function exportAsTxt(filename) {
+      let content = `Transcript: ${roomData?.title || 'Untitled'}\n`;
+      content += `Date: ${new Date().toLocaleDateString()}\n`;
+      content += `Room ID: ${roomData?.room_id || ''}\n\n`;
+      content += '=' .repeat(50) + '\n\n';
+      
+      subtitleHistory.forEach((item, index) => {
+        content += `[${item.timestamp}]\n`;
+        if (item.thai) content += `Thai: ${item.thai}\n`;
+        if (item.english) content += `English: ${item.english}\n`;
+        content += '\n';
+      });
+      
+      downloadFile(content, filename + '.txt', 'text/plain');
+    }
+    
+    function exportAsPdf(filename) {
+      // Simple HTML to PDF conversion (would need jsPDF library for advanced features)
+      const printWindow = window.open('', '_blank');
+      let htmlContent = `
+        <html>
+        <head>
+          <title>${filename}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+            .subtitle-item { margin-bottom: 15px; padding: 10px; border-left: 3px solid #007bff; }
+            .timestamp { color: #666; font-size: 0.9em; }
+            .thai { font-weight: bold; margin: 5px 0; }
+            .english { color: #555; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Transcript: ${roomData?.title || 'Untitled'}</h1>
+            <p>Date: ${new Date().toLocaleDateString()}</p>
+            <p>Room ID: ${roomData?.room_id || ''}</p>
+          </div>
+      `;
+      
+      subtitleHistory.forEach(item => {
+        htmlContent += `
+          <div class="subtitle-item">
+            <div class="timestamp">[${item.timestamp}]</div>
+            ${item.thai ? `<div class="thai">Thai: ${item.thai}</div>` : ''}
+            ${item.english ? `<div class="english">English: ${item.english}</div>` : ''}
+          </div>
+        `;
+      });
+      
+      htmlContent += '</body></html>';
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.print();
+    }
+    
+    function exportAsSrt(filename) {
+      let srtContent = '';
+      subtitleHistory.forEach((item, index) => {
+        const startTime = formatSrtTime(index * 3000); // 3 seconds per subtitle
+        const endTime = formatSrtTime((index + 1) * 3000);
+        
+        srtContent += `${index + 1}\n`;
+        srtContent += `${startTime} --> ${endTime}\n`;
+        if (item.thai) srtContent += `${item.thai}\n`;
+        if (item.english) srtContent += `${item.english}\n`;
+        srtContent += '\n';
+      });
+      
+      downloadFile(srtContent, filename + '.srt', 'text/plain');
+    }
+    
+    function formatSrtTime(milliseconds) {
+      const hours = Math.floor(milliseconds / 3600000);
+      const minutes = Math.floor((milliseconds % 3600000) / 60000);
+      const seconds = Math.floor((milliseconds % 60000) / 1000);
+      const ms = milliseconds % 1000;
+      
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`;
+    }
+    
+    function downloadFile(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    
+    // Enhanced History Display with Search
+    function updateHistoryDisplay() {
+      const historyItems = document.getElementById('historyItems');
+      const historyCount = document.getElementById('historyCount');
+      
+      const displayHistory = filteredHistory.length > 0 ? filteredHistory : subtitleHistory;
+      
+      if (historyCount) {
+        const total = subtitleHistory.length;
+        const shown = displayHistory.length;
+        historyCount.textContent = shown === total ? `${total} items` : `${shown}/${total} items`;
+      }
+      
+      if (historyItems) {
+        historyItems.innerHTML = '';
+        
+        displayHistory.forEach(item => {
+          const historyDiv = document.createElement('div');
+          historyDiv.className = 'history-item';
+          historyDiv.innerHTML = `
+            <div class="history-time">${item.timestamp}</div>
+            <div class="history-thai">${item.thai}</div>
+            <div class="history-english">${item.english}</div>
+          `;
+          
+          // Add click handler to show this subtitle as current
+          historyDiv.addEventListener('click', function() {
+            elements.currentThai.textContent = item.thai;
+            elements.currentEnglish.textContent = item.english;
+            elements.currentThai.style.opacity = '1';
+            elements.currentEnglish.style.opacity = '1';
+            
+            // Hide no subtitle message
+            const noSubtitleMsg = document.getElementById('noSubtitleMessage');
+            if (noSubtitleMsg) {
+              noSubtitleMsg.style.display = 'none';
+            }
+          });
+          
+          historyItems.appendChild(historyDiv);
+        });
+        
+        // Auto-scroll to bottom if enabled
+        if (isAutoScrollEnabled && displayHistory.length > 0) {
+          historyItems.scrollTop = historyItems.scrollHeight;
+        }
+      }
+    }
+    
+    // Initialize all features
+    function initializeAdvancedFeatures() {
+      initializeSearch();
+      initializeFontControls();
+      initializeAutoScroll();
+      initializeExports();
+      updateFontSize(); // Apply initial font size
+    }
 
     // Start the application
     init();
     initializeTTS();
+    initializeAdvancedFeatures();
   </script>
 </body>
 </html>

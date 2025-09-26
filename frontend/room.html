@@ -30,6 +30,9 @@
       --accent-color: #667eea;
       --glass-bg: rgba(26, 31, 46, 0.8);
       --glass-border: rgba(255, 255, 255, 0.1);
+      --font-scale: 1;
+      --font-size-current: calc(1.125rem * var(--font-scale));
+      --font-size-history: calc(0.9rem * var(--font-scale));
     }
 
     body {
@@ -300,6 +303,80 @@
       display: flex;
       align-items: center;
       gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .search-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-input {
+      padding: 0.4rem 2rem 0.4rem 0.75rem;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-secondary, #2d3142);
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      width: 150px;
+      transition: border-color 0.2s ease;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--accent-color, #667eea);
+    }
+
+    .search-icon {
+      position: absolute;
+      right: 0.5rem;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    .font-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.25rem 0.5rem;
+      background: var(--bg-secondary, #2d3142);
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+    }
+
+    .font-controls span {
+      min-width: 35px;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--text-primary);
+    }
+
+    .export-controls {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .btn-sm {
+      padding: 0.3rem 0.5rem;
+      font-size: 0.75rem;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary, #2d3142);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-sm:hover {
+      background: var(--bg-hover, rgba(102, 126, 234, 0.1));
+      border-color: var(--accent-color, #667eea);
+    }
+
+    .btn-sm.active {
+      background: var(--accent-color, #667eea);
+      color: white;
+      border-color: var(--accent-color, #667eea);
     }
 
     .participant-count {
@@ -470,6 +547,21 @@
       transform: translateX(2px);
     }
 
+    .history-item.loaded {
+      animation: fadeInUp 0.3s ease-out;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 0.7;
+        transform: translateY(0);
+      }
+    }
+
     .history-time {
       font-size: 0.75rem;
       color: var(--text-muted);
@@ -478,14 +570,14 @@
 
     .history-thai {
       font-family: 'Noto Sans Thai', sans-serif;
-      font-size: var(--thai-font-size-small, 1rem);
+      font-size: var(--font-size-history);
       font-weight: 500;
       margin-bottom: 0.25rem;
       line-height: 1.4;
     }
 
     .history-english {
-      font-size: var(--english-font-size-small, 0.875rem);
+      font-size: calc(var(--font-size-history) * 0.875);
       color: var(--text-secondary);
       line-height: 1.4;
     }
@@ -514,9 +606,23 @@
     }
 
     .status-dot.online { background: #10b981; }
+    .status-dot.offline { background: #ef4444; }
+    .status-dot.connecting { 
+      background: #f59e0b; 
+      animation: pulse 1s infinite;
+    }
     .status-dot.processing { 
       background: #f59e0b; 
       animation: pulse 1s infinite;
+    }
+    .status-dot.failed { 
+      background: #dc2626; 
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0.3; }
     }
 
     /* Responsive Design */
@@ -994,7 +1100,7 @@
       color: white;
       padding: 12px 20px;
       border-radius: 8px;
-      font-size: 1.2rem;
+      font-size: var(--font-size-current);
       line-height: 1.4;
       margin-bottom: 8px;
       backdrop-filter: blur(4px);
@@ -1007,6 +1113,26 @@
 
     .subtitle-thai {
       font-weight: 600;
+    }
+
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg-panel);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 4px;
+      transition: background 0.2s ease;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--accent-color);
     }
 
     /* Content Area */
@@ -1299,6 +1425,33 @@
             Live Subtitles
           </h2>
           <div class="header-actions">
+            <div class="search-container">
+              <input type="text" id="searchInput" placeholder="Search subtitles..." class="search-input">
+              <i class="fas fa-search search-icon"></i>
+            </div>
+            <div class="font-controls">
+              <button id="fontDecrease" class="btn btn-sm" title="Decrease Font Size">
+                <i class="fas fa-minus"></i>
+              </button>
+              <span id="fontSizeDisplay">100%</span>
+              <button id="fontIncrease" class="btn btn-sm" title="Increase Font Size">
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+            <div class="export-controls">
+              <button id="exportTxt" class="btn btn-sm" title="Export as TXT">
+                <i class="fas fa-file-alt"></i>
+              </button>
+              <button id="exportPdf" class="btn btn-sm" title="Export as PDF">
+                <i class="fas fa-file-pdf"></i>
+              </button>
+              <button id="exportSrt" class="btn btn-sm" title="Export as SRT">
+                <i class="fas fa-closed-captioning"></i>
+              </button>
+            </div>
+            <button id="autoScrollToggle" class="btn btn-sm active" title="Toggle Auto-scroll">
+              <i class="fas fa-scroll"></i>
+            </button>
             <div class="participant-count" id="subtitleParticipantCount">
               Waiting for presenter...
             </div>
@@ -1458,14 +1611,24 @@
       
       // Timeline controls
       timelineControls: document.getElementById('timelineControls'),
-      timelineMinimize: document.getElementById('timelineMinimize')
+      timelineMinimize: document.getElementById('timelineMinimize'),
+      
+      // Advanced features
+      searchInput: document.getElementById('searchInput'),
+      fontDecrease: document.getElementById('fontDecrease'),
+      fontIncrease: document.getElementById('fontIncrease'),
+      fontSizeDisplay: document.getElementById('fontSizeDisplay'),
+      exportTxt: document.getElementById('exportTxt'),
+      exportPdf: document.getElementById('exportPdf'),
+      exportSrt: document.getElementById('exportSrt'),
+      autoScrollToggle: document.getElementById('autoScrollToggle')
     };
 
     // State
     let websocket = null;
     let roomData = null;
     let isLive = false;
-    let showEnglishSubtitles = false;
+    let showEnglishSubtitles = true;  // Enable English subtitles by default
     let showThaiSubtitles = true;
     let currentAudioLanguage = 'english';
     let transcriptSegments = [];
@@ -1491,6 +1654,9 @@
       // Set up fullscreen controls
       setupFullscreenControls();
       setupTimelineControls();
+      
+      // Initialize advanced features
+      initializeAdvancedFeatures();
       
       // Load historical subtitles
       loadHistoricalSubtitles();
@@ -1667,6 +1833,9 @@
     function setupToggleControls() {
       // Thai subtitle toggle
       if (elements.thaiToggle) {
+        // Set initial state
+        elements.thaiToggle.classList.toggle('active', showThaiSubtitles);
+        
         elements.thaiToggle.addEventListener('click', () => {
           showThaiSubtitles = !showThaiSubtitles;
           elements.thaiToggle.classList.toggle('active', showThaiSubtitles);
@@ -1677,6 +1846,9 @@
       
       // English subtitle toggle
       if (elements.englishToggle) {
+        // Set initial state
+        elements.englishToggle.classList.toggle('active', showEnglishSubtitles);
+        
         elements.englishToggle.addEventListener('click', () => {
           showEnglishSubtitles = !showEnglishSubtitles;
           elements.englishToggle.classList.toggle('active', showEnglishSubtitles);
@@ -1993,65 +2165,7 @@
 
     }
 
-    function connectWebSocket() {
-      if (websocket) {
-        websocket.close();
-      }
-
-      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const wsUrl = `${protocol}://${window.location.host}/ws/room/${roomId}`;
-      websocket = new WebSocket(wsUrl);
-
-      websocket.onopen = () => {
-        console.log('Connected to room:', roomId);
-        loadHistoricalSubtitles();
-      };
-
-      websocket.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('🎯 PARTICIPANT RECEIVED MESSAGE:', data.type, data);
-          handleWebSocketMessage(data);
-        } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
-        }
-      };
-
-      websocket.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
-
-      websocket.onclose = () => {
-        console.log('WebSocket closed, attempting to reconnect...');
-        setTimeout(connectWebSocket, 2000);
-      };
-    }
-
-    function handleWebSocketMessage(data) {
-      switch (data.type) {
-        case 'partial':
-        case 'final':
-          updateSubtitles(data);
-          if (data.type === 'final') {
-            addToTranscript(data);
-            // Trigger TTS for Thai text
-            if (ttsEnabled && data.thai_text) {
-              synthesizeSpeech(data.thai_text);
-            }
-          }
-          break;
-        case 'status':
-          // Handle status updates
-          break;
-        case 'room_status':
-          updateRoomStatus(data.is_live, data.participant_count);
-          break;
-        case 'transcript':
-          // Load existing transcript when joining room
-          loadExistingTranscript(data.transcript);
-          break;
-      }
-    }
+    // This duplicate function has been removed - using the enhanced version below
 
     async function loadHistoricalSubtitles() {
       try {
@@ -2139,72 +2253,101 @@
       elements.subtitleHistory.insertBefore(historyItem, elements.subtitleHistory.firstChild);
     }
 
+    // WebSocket with enhanced reconnection logic
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 10;
+    let reconnectTimeout = null;
+
     function connectWebSocket() {
       try {
+        // Clear any existing reconnection timeout
+        if (reconnectTimeout) {
+          clearTimeout(reconnectTimeout);
+          reconnectTimeout = null;
+        }
+
+        // Close existing connection if any
+        if (websocket) {
+          websocket.close();
+        }
+
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${wsProtocol}//${window.location.host}/ws/room/${roomId}`;
         
+        console.log(`Connecting to WebSocket: ${wsUrl}`);
         websocket = new WebSocket(wsUrl);
         
         websocket.onopen = () => {
-          console.log('WebSocket connected');
+          console.log('✅ WebSocket connected successfully');
+          reconnectAttempts = 0; // Reset reconnection attempts
           updateConnectionStatus('live');
           updateWebSocketStatus('connected');
           updateAudioStreamStatus('ready');
           updateTranslationStatus('ready');
+          
+          // Load historical subtitles after connection
+          loadHistoricalSubtitles();
         };
         
         websocket.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
+            console.log('📨 WebSocket message received:', data.type, data);
             handleWebSocketMessage(data);
           } catch (error) {
-            console.error('Failed to parse WebSocket message:', error);
+            console.error('❌ Failed to parse WebSocket message:', error);
           }
         };
         
-        websocket.onclose = () => {
-          console.log('WebSocket disconnected');
+        websocket.onclose = (event) => {
+          console.log('🔌 WebSocket disconnected', event.code, event.reason);
           updateConnectionStatus('offline');
           updateWebSocketStatus('disconnected');
           updateAudioStreamStatus('error');
           updateTranslationStatus('error');
-          // Attempt to reconnect after 3 seconds
-          setTimeout(connectWebSocket, 3000);
+          
+          // Implement exponential backoff for reconnection
+          if (reconnectAttempts < maxReconnectAttempts) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Max 30 seconds
+            reconnectAttempts++;
+            console.log(`🔄 Attempting reconnection ${reconnectAttempts}/${maxReconnectAttempts} in ${delay}ms`);
+            
+            reconnectTimeout = setTimeout(() => {
+              connectWebSocket();
+            }, delay);
+          } else {
+            console.error('❌ Max reconnection attempts reached. Please refresh the page.');
+            updateWebSocketStatus('failed');
+          }
         };
         
         websocket.onerror = (error) => {
-          console.error('WebSocket error:', error);
+          console.error('❌ WebSocket error:', error);
           updateConnectionStatus('offline');
           updateWebSocketStatus('disconnected');
         };
       } catch (error) {
-        console.error('Failed to connect WebSocket:', error);
+        console.error('❌ Failed to create WebSocket connection:', error);
+        updateWebSocketStatus('failed');
       }
     }
 
     function handleWebSocketMessage(data) {
-      console.log('WebSocket message received:', data);
+      console.log('🎯 PARTICIPANT RECEIVED MESSAGE:', data.type, data);
       
       switch (data.type) {
         case 'partial':
           updateTranslationStatus('active');
-          addToTranscript({
-            thai: data.thai,
-            english: data.english,
-            timestamp_ms: data.timestamp_ms || Date.now(),
-            type: data.type
-          });
+          // Update live subtitles display
+          updateSubtitles(data);
           break;
           
         case 'final':
           updateTranslationStatus('ready');
-          addToTranscript({
-            thai: data.thai,
-            english: data.english,
-            timestamp_ms: data.timestamp_ms || Date.now(),
-            type: data.type
-          });
+          // Update live subtitles display
+          updateSubtitles(data);
+          // Add to history
+          addToTranscript(data);
           startLiveSession(); // Ensure live status is active
           break;
           
@@ -2406,10 +2549,24 @@
         // Add to beginning of history (newest first in history)
         elements.subtitleHistory.insertBefore(historyItem, elements.subtitleHistory.firstChild);
         
+        // Add lazy loading observer for new item
+        if (window.historyObserver) {
+          window.historyObserver.observe(historyItem);
+        }
+        
+        // Auto-scroll to top if enabled (newest items are at top)
+        if (window.autoScrollEnabled !== false) {
+          elements.subtitleHistory.scrollTop = 0;
+        }
+        
         // Limit history to 100 items to prevent memory issues (increased from 50)
         const historyItems = elements.subtitleHistory.querySelectorAll('.history-item');
         if (historyItems.length > 100) {
-          historyItems[historyItems.length - 1].remove();
+          const removedItem = historyItems[historyItems.length - 1];
+          if (window.historyObserver) {
+            window.historyObserver.unobserve(removedItem);
+          }
+          removedItem.remove();
         }
         
         console.log(`Added subtitle to history. Total history items: ${historyItems.length}`);
@@ -2531,6 +2688,305 @@
     }
 
 
+
+    // Global variables for advanced features
+    window.autoScrollEnabled = true;
+    let currentFontScale = 1;
+    let searchTerm = '';
+
+    // Advanced Features Implementation
+    function initializeAdvancedFeatures() {
+      // Get elements for advanced features
+      const searchInput = document.getElementById('searchInput');
+      const searchContainer = document.querySelector('.search-container');
+      const fontDecreaseBtn = document.getElementById('fontDecrease');
+      const fontIncreaseBtn = document.getElementById('fontIncrease');
+      const fontSizeDisplay = document.getElementById('fontSizeDisplay');
+      const exportTxtBtn = document.getElementById('exportTxt');
+      const exportPdfBtn = document.getElementById('exportPdf');
+      const exportSrtBtn = document.getElementById('exportSrt');
+      const autoScrollToggle = document.getElementById('autoScrollToggle');
+
+      // Font size controls
+      if (fontDecreaseBtn && fontIncreaseBtn && fontSizeDisplay) {
+        function updateFontScale() {
+          document.documentElement.style.setProperty('--font-scale', currentFontScale);
+          fontSizeDisplay.textContent = `${Math.round(currentFontScale * 100)}%`;
+          console.log('Font scale updated to:', currentFontScale);
+        }
+
+        fontDecreaseBtn.addEventListener('click', () => {
+          currentFontScale = Math.max(0.7, currentFontScale - 0.1);
+          updateFontScale();
+        });
+
+        fontIncreaseBtn.addEventListener('click', () => {
+          currentFontScale = Math.min(2.0, currentFontScale + 0.1);
+          updateFontScale();
+        });
+
+        // Initialize font scale
+        updateFontScale();
+      }
+
+      // Search functionality
+      if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+          searchTerm = e.target.value.toLowerCase();
+          filterHistoryItems();
+        });
+
+        searchInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            searchInput.value = '';
+            searchTerm = '';
+            filterHistoryItems();
+            searchInput.blur();
+          }
+        });
+      }
+
+      function filterHistoryItems() {
+        if (!elements.subtitleHistory) return;
+        
+        const historyItems = elements.subtitleHistory.querySelectorAll('.history-item');
+        let visibleCount = 0;
+
+        historyItems.forEach(item => {
+          const thaiText = item.querySelector('.history-thai')?.textContent.toLowerCase() || '';
+          const englishText = item.querySelector('.history-english')?.textContent.toLowerCase() || '';
+          const timeText = item.querySelector('.history-time')?.textContent.toLowerCase() || '';
+          
+          const matches = !searchTerm || 
+                         thaiText.includes(searchTerm) || 
+                         englishText.includes(searchTerm) ||
+                         timeText.includes(searchTerm);
+          
+          if (matches) {
+            item.style.display = 'block';
+            visibleCount++;
+          } else {
+            item.style.display = 'none';
+          }
+        });
+
+        console.log(`Search "${searchTerm}" found ${visibleCount} matching items`);
+      }
+
+      // Make filterHistoryItems available globally for other functions
+      window.filterHistoryItems = filterHistoryItems;
+
+      // Export functions
+      if (exportTxtBtn) {
+        exportTxtBtn.addEventListener('click', exportAsText);
+      }
+
+      if (exportPdfBtn) {
+        exportPdfBtn.addEventListener('click', exportAsPDF);
+      }
+
+      if (exportSrtBtn) {
+        exportSrtBtn.addEventListener('click', exportAsSRT);
+      }
+
+      // Auto-scroll toggle
+      if (autoScrollToggle) {
+        autoScrollToggle.addEventListener('click', () => {
+          window.autoScrollEnabled = !window.autoScrollEnabled;
+          autoScrollToggle.classList.toggle('active', window.autoScrollEnabled);
+          console.log('Auto-scroll:', window.autoScrollEnabled ? 'enabled' : 'disabled');
+        });
+
+        // Initialize auto-scroll as enabled
+        autoScrollToggle.classList.add('active');
+        window.autoScrollEnabled = true;
+      }
+
+      // Add lazy loading for history items
+      setupLazyLoading();
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', (e) => {
+        // F key for fullscreen
+        if (e.key === 'f' || e.key === 'F') {
+          if (!e.ctrlKey && !e.altKey && !e.metaKey) {
+            e.preventDefault();
+            toggleFullscreen();
+          }
+        }
+        
+        // Ctrl+F for search
+        if (e.ctrlKey && e.key === 'f') {
+          e.preventDefault();
+          if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+          }
+        }
+        
+        // Escape key
+        if (e.key === 'Escape') {
+          if (elements.subtitleArea.classList.contains('fullscreen')) {
+            toggleFullscreen();
+          }
+        }
+      });
+
+      console.log('Advanced features initialized');
+    }
+
+    function setupLazyLoading() {
+      // Intersection Observer for lazy loading history items
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const item = entry.target;
+            // Load any additional content if needed
+            item.classList.add('loaded');
+          }
+        });
+      }, {
+        root: elements.subtitleHistory,
+        rootMargin: '50px',
+        threshold: 0.1
+      });
+
+      // Observe existing history items
+      const existingItems = elements.subtitleHistory.querySelectorAll('.history-item');
+      existingItems.forEach(item => observer.observe(item));
+
+      // Store observer globally for new items
+      window.historyObserver = observer;
+    }
+
+    function exportAsText() {
+      try {
+        const historyItems = elements.subtitleHistory.querySelectorAll('.history-item:not([style*="display: none"])');
+        let content = `Live Seminar Room ${roomId} - Transcript\n`;
+        content += `Exported on: ${new Date().toLocaleString()}\n`;
+        content += `Total segments: ${historyItems.length}\n\n`;
+        content += '='.repeat(50) + '\n\n';
+
+        historyItems.forEach((item, index) => {
+          const timeElement = item.querySelector('.history-time');
+          const thaiElement = item.querySelector('.history-thai');
+          const englishElement = item.querySelector('.history-english');
+          
+          const time = timeElement?.textContent || 'Unknown time';
+          const thai = thaiElement?.textContent || '';
+          const english = englishElement?.textContent || '';
+          
+          content += `[${time}]\n`;
+          if (thai) content += `Thai: ${thai}\n`;
+          if (english) content += `English: ${english}\n`;
+          content += '\n';
+        });
+
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `room_${roomId}_transcript_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        console.log('Text export completed');
+      } catch (error) {
+        console.error('Export failed:', error);
+        alert('Export failed. Please try again.');
+      }
+    }
+
+    function exportAsPDF() {
+      try {
+        // Note: This is a simplified PDF export. For production, consider using jsPDF library
+        const historyItems = elements.subtitleHistory.querySelectorAll('.history-item:not([style*="display: none"])');
+        let content = `Live Seminar Room ${roomId} - Transcript (PDF Format)\n`;
+        content += `Exported on: ${new Date().toLocaleString()}\n`;
+        content += `Total segments: ${historyItems.length}\n\n`;
+
+        historyItems.forEach((item, index) => {
+          const timeElement = item.querySelector('.history-time');
+          const thaiElement = item.querySelector('.history-thai');
+          const englishElement = item.querySelector('.history-english');
+          
+          const time = timeElement?.textContent || 'Unknown time';
+          const thai = thaiElement?.textContent || '';
+          const english = englishElement?.textContent || '';
+          
+          content += `[${time}]\n`;
+          if (thai) content += `Thai: ${thai}\n`;
+          if (english) content += `English: ${english}\n`;
+          content += '\n';
+        });
+
+        // For now, export as text file with PDF extension
+        // In production, implement proper PDF generation
+        const blob = new Blob([content], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `room_${roomId}_transcript_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        console.log('PDF export completed (as text format)');
+      } catch (error) {
+        console.error('PDF export failed:', error);
+        alert('PDF export failed. Please try again.');
+      }
+    }
+
+    function exportAsSRT() {
+      try {
+        const historyItems = elements.subtitleHistory.querySelectorAll('.history-item:not([style*="display: none"])');
+        let content = '';
+        let segmentIndex = 1;
+
+        historyItems.forEach((item, index) => {
+          const timeElement = item.querySelector('.history-time');
+          const thaiElement = item.querySelector('.history-thai');
+          const englishElement = item.querySelector('.history-english');
+          
+          const thai = thaiElement?.textContent || '';
+          const english = englishElement?.textContent || '';
+          
+          if (thai || english) {
+            // Simple time format - in production, use actual timestamps
+            const startTime = `00:${String(Math.floor(index * 5 / 60)).padStart(2, '0')}:${String((index * 5) % 60).padStart(2, '0')},000`;
+            const endTime = `00:${String(Math.floor((index + 1) * 5 / 60)).padStart(2, '0')}:${String(((index + 1) * 5) % 60).padStart(2, '0')},000`;
+            
+            content += `${segmentIndex}\n`;
+            content += `${startTime} --> ${endTime}\n`;
+            if (thai) content += `${thai}\n`;
+            if (english && thai) content += `${english}\n`;
+            else if (english) content += `${english}\n`;
+            content += '\n';
+            
+            segmentIndex++;
+          }
+        });
+
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `room_${roomId}_subtitles_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.srt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        console.log('SRT export completed');
+      } catch (error) {
+        console.error('SRT export failed:', error);
+        alert('SRT export failed. Please try again.');
+      }
+    }
 
     // Start the application
     // Initialize when DOM is loaded
