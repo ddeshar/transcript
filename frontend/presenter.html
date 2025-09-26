@@ -627,8 +627,7 @@
     <!-- Header Section -->
     <header class="presenter-header">
       <div class="header-top">
-        <h1 class="presenter-title">Presenter Control Center</h1>
-        <h2 class="room-title" id="roomTitle">Loading Room...</h2>
+        <h1 class="presenter-title" id="roomTitle">Loading Room...</h1>
         <p class="room-description" id="roomDescription">Loading description...</p>
       </div>
       
@@ -786,10 +785,10 @@
 
         <div class="current-subtitle-text">
           <div class="subtitle-thai" id="currentThai">
-            สวัสดีครับ/ค่ะ นี่คือข้อความทดสอบ
+            <!-- Thai subtitles will appear here during live session -->
           </div>
           <div class="subtitle-english" id="currentEnglish">
-            Hello, this is the second attempt test.
+            <!-- English subtitles will appear here during live session -->
           </div>
         </div>
 
@@ -814,8 +813,29 @@
   </div>
 
   <script>
-    // Extract room ID from URL
-    const roomId = window.location.pathname.split('/').pop();
+    // Extract room ID from URL - handle both /presenter/roomId and ?roomId=xxx formats
+    function getRoomId() {
+      // First try URL path (for /presenter/roomId format)
+      const pathParts = window.location.pathname.split('/');
+      const lastPart = pathParts[pathParts.length - 1];
+      
+      // If last part is not a file (doesn't contain .), use it as room ID
+      if (lastPart && !lastPart.includes('.') && lastPart !== 'presenter') {
+        return lastPart;
+      }
+      
+      // Otherwise try query parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      const roomFromQuery = urlParams.get('roomId');
+      if (roomFromQuery) {
+        return roomFromQuery;
+      }
+      
+      // Default fallback
+      return 'test123';
+    }
+    
+    const roomId = getRoomId();
     
     // UI Elements
     const elements = {
@@ -1083,11 +1103,13 @@
 
       websocket.onopen = () => {
         console.log('WebSocket connected');
-        websocket.send(JSON.stringify({ 
+        const configMessage = { 
           type: 'config', 
           sampleRate: 16000,
           roomId: roomId
-        }));
+        };
+        console.log('Sending config message:', configMessage);
+        websocket.send(JSON.stringify(configMessage));
       };
 
       websocket.onmessage = (event) => {

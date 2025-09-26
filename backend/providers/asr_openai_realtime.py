@@ -87,6 +87,8 @@ class OpenAIRealtimeStream(ASRStream):
             text=transcript,
             is_final=False,
             session_id=self.session_id,
+            start_ms=0,
+            end_ms=1000,
             segment_id=self._seq,
         )
         
@@ -112,6 +114,8 @@ class OpenAIRealtimeStream(ASRStream):
                     text=transcript,
                     is_final=True,
                     session_id=self.session_id,
+                    start_ms=0,
+                    end_ms=len(pcm_bytes) // (self.sample_rate * 2) * 1000,
                     segment_id=self._seq,
                 )
                 await self._queue.put(result)

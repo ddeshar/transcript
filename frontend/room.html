@@ -1364,8 +1364,29 @@
   </div>
 
   <script>
-    // Extract room ID from URL
-    const roomId = window.location.pathname.split('/').pop();
+    // Extract room ID from URL - handle both /room/roomId and ?roomId=xxx formats
+    function getRoomId() {
+      // First try URL path (for /room/roomId format)
+      const pathParts = window.location.pathname.split('/');
+      const lastPart = pathParts[pathParts.length - 1];
+      
+      // If last part is not a file (doesn't contain .), use it as room ID
+      if (lastPart && !lastPart.includes('.') && lastPart !== 'room') {
+        return lastPart;
+      }
+      
+      // Otherwise try query parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      const roomFromQuery = urlParams.get('roomId');
+      if (roomFromQuery) {
+        return roomFromQuery;
+      }
+      
+      // Default fallback
+      return 'test123';
+    }
+    
+    const roomId = getRoomId();
     
     // UI Elements
     const elements = {
@@ -1397,6 +1418,9 @@
       currentEnglish: document.getElementById('currentEnglish'),
       subtitleHistory: document.getElementById('subtitleHistory'),
       fullscreenBtn: document.getElementById('fullscreenBtn'),
+      
+      // Legacy subtitle elements (for compatibility)
+      englishSubtitle: document.getElementById('englishSubtitle'),
       
       // Status indicators
       connectionStatus: document.getElementById('connectionStatus'),
@@ -1791,11 +1815,11 @@
 
     function setupEventListeners() {
       // Subtitle toggles with null checks
-      if (elements.englishToggle && elements.englishSubtitle) {
+      if (elements.englishToggle && elements.currentEnglish) {
         elements.englishToggle.addEventListener('click', () => {
           showEnglishSubtitles = !showEnglishSubtitles;
           elements.englishToggle.classList.toggle('active', showEnglishSubtitles);
-          elements.englishSubtitle.style.display = showEnglishSubtitles ? 'block' : 'none';
+          elements.currentEnglish.style.display = showEnglishSubtitles ? 'block' : 'none';
           console.log('English subtitles:', showEnglishSubtitles ? 'ON' : 'OFF');
         });
       }
@@ -1804,7 +1828,7 @@
         elements.thaiToggle.addEventListener('click', () => {
           showThaiSubtitles = !showThaiSubtitles;
           elements.thaiToggle.classList.toggle('active', showThaiSubtitles);
-          elements.thaiSubtitle.style.display = showThaiSubtitles ? 'block' : 'none';
+          elements.currentThai.style.display = showThaiSubtitles ? 'block' : 'none';
           console.log('Thai subtitles:', showThaiSubtitles ? 'ON' : 'OFF');
         });
       }
@@ -1958,6 +1982,7 @@
       websocket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          console.log('🎯 PARTICIPANT RECEIVED MESSAGE:', data.type, data);
           handleWebSocketMessage(data);
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -2226,25 +2251,11 @@
     }
 
     function updateSubtitles(data) {
-      if (showThaiSubtitles && data.thai && elements.thaiSubtitle) {
-        elements.thaiSubtitle.textContent = data.thai;
-      }
+      // For live streaming, just update current subtitle display
+      updateCurrentSubtitle(data);
       
-      if (showEnglishSubtitles && data.english && elements.englishSubtitle) {
-        elements.englishSubtitle.textContent = data.english;
-      }
-
-      // Auto-hide subtitles after 5 seconds for partial results
-      if (data.type === 'partial') {
-        setTimeout(() => {
-          if (elements.thaiSubtitle.textContent === data.thai) {
-            elements.thaiSubtitle.textContent = '';
-          }
-          if (elements.englishSubtitle.textContent === data.english) {
-            elements.englishSubtitle.textContent = '';
-          }
-        }, 5000);
-      }
+      // Don't auto-hide - let final results persist
+      // and move to history when new ones come in
     }
 
     function addToTranscript(data) {

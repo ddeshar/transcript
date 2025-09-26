@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Dict
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     DateTime,
@@ -133,7 +134,7 @@ class AudioSegment(Base):
     segment_id = Column(String(50), unique=True, nullable=False)
     
     # Timing
-    timestamp_ms = Column(Integer, nullable=False)
+    timestamp_ms = Column(BigInteger, nullable=False)
     duration_ms = Column(Integer, nullable=False)
     sequence_number = Column(Integer, nullable=False)
     
@@ -181,7 +182,7 @@ class SubtitleSegment(Base):
     segment_id = Column(String(50), unique=True, nullable=False)
     
     # Timing
-    timestamp_ms = Column(Integer, nullable=False)
+    timestamp_ms = Column(BigInteger, nullable=False)
     duration_ms = Column(Integer, nullable=False)
     sequence_number = Column(Integer, nullable=False)
     

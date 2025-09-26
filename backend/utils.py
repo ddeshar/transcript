@@ -65,9 +65,14 @@ def chunk_generator(data: bytes, size: int):
         yield data[idx: idx + size]
 
 
-def jsonify_log(event: str, **fields: Any) -> None:
+def jsonify_log(event_or_level, data_or_kwargs=None, **fields: Any) -> None:
     logger = get_logger()
-    payload: Dict[str, Any] = {"event": event, **fields}
+    # Handle old format: jsonify_log("INFO", {...})
+    if data_or_kwargs is not None and isinstance(data_or_kwargs, dict):
+        payload: Dict[str, Any] = {"level": event_or_level, **data_or_kwargs}
+    else:
+        # Handle new format: jsonify_log("event", key=value, ...)
+        payload: Dict[str, Any] = {"event": event_or_level, **fields}
     logger.info(json_dumps(payload))
 
 

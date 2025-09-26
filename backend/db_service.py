@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -87,7 +87,7 @@ class DatabaseService:
     def update_presenter_session(
         db: Session, 
         room_id: str, 
-        presenter_session_id: str
+        presenter_session_id: Optional[str]
     ) -> SeminarRoom | None:
         """Update room presenter session ID."""
         room = db.query(SeminarRoom).filter(
@@ -456,7 +456,7 @@ class AsyncDatabaseService:
 
     @classmethod
     async def update_presenter_session(
-        cls, room_id: str, presenter_session_id: str
+        cls, room_id: str, presenter_session_id: Optional[str]
     ) -> SeminarRoom | None:
         """Async update presenter session operation."""
         def _update_presenter():
@@ -525,6 +525,15 @@ class AsyncDatabaseService:
                 db.close()
                 
         return await cls.execute_sync(_list_rooms)
+
+    @classmethod
+    async def get_stable_session_id(cls, room_id: str) -> str:
+        """Get or create a stable session ID for a room."""
+        import hashlib
+        # Generate a deterministic session ID based on room ID
+        # This ensures the same room always gets the same session ID
+        stable_id = hashlib.md5(f"room_{room_id}_stable".encode()).hexdigest()
+        return stable_id
 
     # Participant Analytics Methods
     @classmethod

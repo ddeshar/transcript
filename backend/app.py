@@ -239,6 +239,7 @@ ASR_PROVIDER = create_asr_provider(
     base_dir=BASE_DIR,
     settings=os.environ,
 )
+get_logger().info(f"ASR Provider: {ASR_PROVIDER.__class__.__name__} ({settings.asr_provider})")
 MT_PROVIDER: MTProvider = create_mt_provider(
     settings.mt_provider,
     base_dir=BASE_DIR,
@@ -1279,7 +1280,7 @@ async def get_room_stats(room_id: str):
     if presenter_id and presenter_id in ACTIVE_SESSIONS:
         session_state = ACTIVE_SESSIONS[presenter_id]
         if hasattr(session_state, 'transcript') and session_state.transcript:
-            segments = len(session_state.transcript.segments)
+            segments = len(session_state.transcript._segments)
     
     return {
         "room_id": room_id,
@@ -1671,6 +1672,39 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     await send({"type": "session", "sessionId": sess_id})
     await send({"type": "status", "status": "ready"})
 
+    # Wait for and process config message immediately after connection
+    try:
+        config_message = await asyncio.wait_for(websocket.receive(), timeout=5.0)
+        
+        if "text" in config_message and config_message["text"]:
+            try:
+                config_data = json.loads(config_message["text"])
+                
+                if config_data.get("type") == "config":
+                    sr = config_data.get("sampleRate")
+                    room_id = config_data.get("roomId")
+                    
+                    # Link session to room if roomId provided
+                    if room_id:
+                        room = await AsyncDatabaseService.get_room(room_id)
+                        if room:
+                            state.room_id = room_id
+                            # Always update presenter session with current session ID
+                            await AsyncDatabaseService.update_presenter_session(
+                                room_id, sess_id
+                            )
+                            get_logger().info(
+                                f"Auto-linked session {sess_id} to room {room_id}"
+                            )
+                    
+                    if isinstance(sr, int) and sr > 0:
+                        state.sample_rate = sr
+                        
+            except json.JSONDecodeError:
+                pass  # Continue with default settings if config parsing fails
+    except asyncio.TimeoutError:
+        pass  # Continue with default settings if no config received
+
     vad = VoiceActivityDetector(
         sample_rate=state.sample_rate,
         aggressiveness=3,  # Most aggressive noise filtering (0-3)
@@ -1680,25 +1714,44 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     async def forward_results(stream: ASRStream) -> None:
         nonlocal state
+        print(f"DEBUG: forward_results function called for session {sess_id}")
         try:
+            print(f"DEBUG: About to log forward_results_starting")
+            jsonify_log("forward_results_starting",
+                        message=f"🎯 Starting forward_results for session {sess_id}",
+                        stream_type=type(stream).__name__)
+            print(f"DEBUG: Logged forward_results_starting successfully")
+            result_count = 0
             async for result in stream.results():
+                result_count += 1
+                jsonify_log("INFO", {
+                    "message": f"� GOT RESULT for session {sess_id}",
+                    "text": (result.text[:50] + "..." 
+                            if len(result.text) > 50 else result.text),
+                    "is_final": result.is_final,
+                    "has_text": bool(result.text.strip())
+                })
                 english_text = result.text.strip()
                 if not english_text:
                     continue
                 
-                # EMERGENCY FILTER: Block any disclaimer content
-                disclaimer_patterns = [
-                    "please see the complete disclaimer",
-                    "sites.google.com",
-                    "all rights reserved",
-                    "privacy policy",
-                    "terms of service",
-                    "disclaimer"
+                # TARGETED FILTER: Block pure disclaimer content (not normal speech containing keywords)
+                full_disclaimer_patterns = [
+                    "please see the complete disclaimer at https://sites.google.com",
+                    "please see the complete disclaimer at sites.google.com",
+                    "see the complete disclaimer at https://sites.google.com",
+                    "see the complete disclaimer at sites.google.com"
                 ]
-                if any(pattern in english_text.lower() for pattern in disclaimer_patterns):
+                # Only block if the entire text is primarily disclaimer content (>80% match)
+                is_pure_disclaimer = any(
+                    pattern in english_text.lower() and 
+                    len(pattern) / len(english_text) > 0.8
+                    for pattern in full_disclaimer_patterns
+                )
+                if is_pure_disclaimer:
                     # Log blocked content for debugging
                     jsonify_log("WARNING", {
-                        "message": "Blocked disclaimer content",
+                        "message": "Blocked pure disclaimer content",
                         "text": english_text,
                         "session": sess_id
                     })
@@ -1709,20 +1762,47 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     state.reset_partial()
                 else:
                     state.last_partial = english_text
-                await send({"type": "status", "status": "translating"})
-                translation = await MT_PROVIDER.translate(english_text, is_final=result.is_final)
-                message = {
-                    "type": "partial" if not result.is_final else "final",
-                    "sessionId": sess_id,
-                    "segmentId": result.segment_id or f"{sess_id}-{result.end_ms}",
-                    "english": english_text,
-                    "thai": translation.text,
-                    "timestamp_ms": result.end_ms or utc_timestamp_ms(),
-                    "provider": {
-                        "asr": ASR_PROVIDER.name,
-                        "mt": translation.provider,
-                    },
-                }
+                
+                # Check if ASR already provided Thai translation
+                is_already_thai = (
+                    result.raw and 
+                    result.raw.get("language") == "th" and 
+                    result.raw.get("type") == "translation"
+                )
+                
+                if is_already_thai:
+                    # ASR provider already translated to Thai
+                    await send({"type": "status", "status": "ready"})
+                    thai_text = english_text  # The "english_text" is actually Thai
+                    source_english = result.raw.get("source", "")
+                    message = {
+                        "type": "partial" if not result.is_final else "final",
+                        "sessionId": sess_id,
+                        "segmentId": result.segment_id or f"{sess_id}-{result.end_ms}",
+                        "english": source_english,
+                        "thai": thai_text,
+                        "timestamp_ms": result.end_ms or utc_timestamp_ms(),
+                        "provider": {
+                            "asr": ASR_PROVIDER.name,
+                            "mt": "built_in",
+                        },
+                    }
+                else:
+                    # Use MT provider for translation
+                    await send({"type": "status", "status": "translating"})
+                    translation = await MT_PROVIDER.translate(english_text, is_final=result.is_final)
+                    message = {
+                        "type": "partial" if not result.is_final else "final",
+                        "sessionId": sess_id,
+                        "segmentId": result.segment_id or f"{sess_id}-{result.end_ms}",
+                        "english": english_text,
+                        "thai": translation.text,
+                        "timestamp_ms": result.end_ms or utc_timestamp_ms(),
+                        "provider": {
+                            "asr": ASR_PROVIDER.name,
+                            "mt": translation.provider,
+                        },
+                    }
                 await send(message)
                 # Broadcast to any registered followers for this session
                 followers = SESSION_FOLLOWERS.get(sess_id)
@@ -1733,11 +1813,22 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 
                 # Broadcast to room participants if this session is a presenter
                 active_rooms = await AsyncDatabaseService.get_active_rooms()
+                jsonify_log("DEBUG", {
+                    "message": f"🔍 Checking broadcast for session {sess_id}",
+                    "active_rooms_count": len(active_rooms),
+                    "rooms": [f"{r.room_id}:{r.presenter_session_id[:8]}"
+                              for r in active_rooms]
+                })
                 for room in active_rooms:
                     if room.presenter_session_id == sess_id:
                         participants = ROOM_PARTICIPANTS.get(
                             room.room_id, set()
                         )
+                        jsonify_log("INFO", {
+                            "message": f"🔊 Broadcasting to {len(participants)} participants in room {room.room_id}",
+                            "session": sess_id,
+                            "text": message.get("thai", "")[:50] + "..."
+                        })
                         for participant_q in participants:
                             with contextlib.suppress(Exception):
                                 await participant_q.put(message)
@@ -1823,13 +1914,36 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     
                     await send({"type": "status", "status": "listening"})
         except asyncio.CancelledError:
-            pass
+            jsonify_log("INFO", {
+                "message": f"🛑 forward_results cancelled for session {sess_id}",
+                "results_processed": result_count
+            })
+        except Exception as e:
+            jsonify_log("ERROR", {
+                "message": f"💥 Exception in forward_results for session {sess_id}",
+                "error": str(e),
+                "type": type(e).__name__,
+                "results_processed": result_count
+            })
+            raise
 
     results_task: Optional[asyncio.Task] = None
 
     try:
+        jsonify_log("asr_stream_creating",
+                    message=f"🎙️ Creating ASR stream for session {sess_id}",
+                    provider=ASR_PROVIDER.name,
+                    sample_rate=state.sample_rate)
         asr_stream = await ASR_PROVIDER.create_stream(sess_id, state.sample_rate)
-        results_task = asyncio.create_task(forward_results(asr_stream))
+        jsonify_log("asr_stream_created",
+                    message=f"✅ ASR stream created, starting results task")
+        try:
+            print(f"DEBUG: About to create forward_results task for session {sess_id}")
+            results_task = asyncio.create_task(forward_results(asr_stream))
+            print(f"DEBUG: Task created successfully for session {sess_id}")
+        except Exception as e:
+            print(f"DEBUG: Failed to create task: {e}")
+            raise
         await send({"type": "status", "status": "listening"})
         while True:
             message = await websocket.receive()
@@ -1841,24 +1955,41 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 except json.JSONDecodeError:
                     continue
                 kind = data.get("type")
+                jsonify_log("INFO", {
+                    "message": f"📨 Received message for session {sess_id}",
+                    "type": kind,
+                    "data_keys": list(data.keys()) if isinstance(data, dict) else "not_dict"
+                })
                 if kind == "config":
                     sr = data.get("sampleRate")
                     room_id = data.get("roomId")
+                    
+                    jsonify_log("DEBUG", {
+                        "message": "📡 Config message received",
+                        "session": sess_id,
+                        "room_id": room_id,
+                        "sample_rate": sr
+                    })
                     
                     # Link session to room if roomId provided
                     if room_id:
                         room = await AsyncDatabaseService.get_room(room_id)
                         if room:
                             state.room_id = room_id
-                            if not room.presenter_session_id:
-                                await AsyncDatabaseService.update_presenter_session(
-                                    room_id, sess_id
-                                )
-                                get_logger().info(
-                                    f"Linked session {sess_id} to room {room_id}"
-                                )
+                            # Always update presenter session with current session ID
+                            await AsyncDatabaseService.update_presenter_session(
+                                room_id, sess_id
+                            )
+                            get_logger().info(
+                                f"Linked session {sess_id} to room {room_id}"
+                            )
                     
                     if isinstance(sr, int) and sr > 0:
+                        jsonify_log("INFO", {
+                            "message": f"🔧 Updating sample rate for session {sess_id}",
+                            "old_rate": state.sample_rate,
+                            "new_rate": sr
+                        })
                         state.sample_rate = sr
                         vad = VoiceActivityDetector(
                             sample_rate=state.sample_rate,
@@ -1866,12 +1997,20 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             padding_duration_ms=200
                         )
                         if asr_stream:
+                            jsonify_log("INFO", {
+                                "message": f"🔄 Recreating ASR stream for session {sess_id}",
+                                "sample_rate": state.sample_rate
+                            })
                             # recreate stream with new rate
                             await asr_stream.finalize()
                             if results_task:
                                 results_task.cancel()
                             asr_stream = await ASR_PROVIDER.create_stream(sess_id, state.sample_rate)
                             results_task = asyncio.create_task(forward_results(asr_stream))
+                        else:
+                            jsonify_log("WARNING", {
+                                "message": f"⚠️ No existing ASR stream to recreate for session {sess_id}"
+                            })
                 elif kind == "control":
                     action = data.get("action")
                     if action == "clear":
@@ -1968,6 +2107,22 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             SESSION_FOLLOWERS.pop(sess_id, None)
         # Remove from active sessions
         ACTIVE_SESSIONS.pop(sess_id, None)
+        
+        # Clear presenter session from database if this was a presenter
+        if hasattr(state, 'room_id') and state.room_id:
+            try:
+                # Only clear if this session was the current presenter
+                room = await AsyncDatabaseService.get_room(state.room_id)
+                if room and room.presenter_session_id == sess_id:
+                    await AsyncDatabaseService.update_presenter_session(
+                        state.room_id, None
+                    )
+                    get_logger().info(
+                        f"Cleared presenter session for room {state.room_id}"
+                    )
+            except Exception as e:
+                get_logger().error(f"Error clearing presenter session: {e}")
+        
         with contextlib.suppress(Exception):
             await sender_task
 
