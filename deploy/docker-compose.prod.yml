@@ -41,6 +41,10 @@ services:
       # Service port inside the container
       - "traefik.http.services.trans.loadbalancer.server.port=8000"
     networks:
+      # Must be on both networks:
+      # - default: to reach internal services like db/redis by hostname
+      # - proxy: to be discoverable by Traefik reverse proxy
+      - default
       - proxy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health" ]
@@ -160,5 +164,8 @@ volumes:
   portainer_data:
 
 networks:
+  # Default internal network where app, db, redis, and pgadmin can talk to each other
+  default:
+    driver: bridge
   proxy:
     driver: bridge
