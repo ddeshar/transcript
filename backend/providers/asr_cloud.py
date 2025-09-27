@@ -66,6 +66,9 @@ class WhisperAPIStream(ASRStream):
         if not text:
             return
         self._seq += 1
+        # Use session_id + timestamp for unique segment IDs to prevent duplicates
+        import time
+        unique_segment_id = f"{self.session_id}-{int(time.time() * 1000)}-{self._seq}"
         await self._queue.put(
             ASRResult(
                 session_id=self.session_id,
@@ -74,7 +77,7 @@ class WhisperAPIStream(ASRStream):
                 start_ms=0,
                 end_ms=0,
                 confidence=None,
-                segment_id=f"openai-{self._seq}",
+                segment_id=unique_segment_id,
                 raw=response if isinstance(response, dict) else response.__dict__,
             )
         )
