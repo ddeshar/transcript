@@ -1,5 +1,3 @@
-version: "3.8"
-
 # Production stack for Transcript app (app + Postgres + Redis + optional pgAdmin)
 # - Uses prebuilt images (change image names to yours)
 # - Persists all data under /srv/transcript on the host

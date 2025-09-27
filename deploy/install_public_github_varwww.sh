@@ -91,9 +91,26 @@ chown -R "$USER_NAME":"$USER_NAME" "$PROJECT_ROOT"
 echo "[5/6] Skipping firewall configuration (per request)."
 
 echo "[6/6] Ensuring env file..."
-if [[ ! -f "$PROJECT_ROOT/deploy/.env" && -f "$PROJECT_ROOT/deploy/.env.example" ]]; then
-  cp "$PROJECT_ROOT/deploy/.env.example" "$PROJECT_ROOT/deploy/.env"
-  echo "Created default .env at $PROJECT_ROOT/deploy/.env — edit credentials as needed."
+if [[ -f "$PROJECT_ROOT/deploy/.env" ]]; then
+  echo ".env already exists at $PROJECT_ROOT/deploy/.env"
+else
+  if [[ -f "$PROJECT_ROOT/deploy/.env.example" ]]; then
+    cp "$PROJECT_ROOT/deploy/.env.example" "$PROJECT_ROOT/deploy/.env"
+    echo "Created .env from .env.example at $PROJECT_ROOT/deploy/.env"
+  else
+    cat > "$PROJECT_ROOT/deploy/.env" <<'EOF'
+# Transcript production .env (created automatically)
+# You can override any service env here. Safe defaults are used if unset.
+# Example DB settings (used by postgres service):
+# POSTGRES_DB=seminar_platform
+# POSTGRES_USER=seminar_user
+# POSTGRES_PASSWORD=seminar_pass
+# Example pgAdmin settings (only if you enable pgAdmin ports):
+# PGADMIN_DEFAULT_EMAIL=admin@example.com
+# PGADMIN_DEFAULT_PASSWORD=admin123
+EOF
+    echo "Created minimal .env at $PROJECT_ROOT/deploy/.env"
+  fi
 fi
 
 echo "Building and starting the stack..."
