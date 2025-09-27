@@ -39,13 +39,16 @@ usermod -aG docker "$USER_NAME" || true
 
 echo "[3/7] Creating /var/www directory structure..."
 mkdir -p /var/www
-mkdir -p "$PROJECT_ROOT"/{media/audio,logs,subtitles,models,deploy}
 chown -R "$USER_NAME":"$USER_NAME" /var/www
-chown -R "$USER_NAME":"$USER_NAME" "$PROJECT_ROOT"
 
 echo "[4/7] Cloning public repository..."
 if [[ ! -d "$PROJECT_ROOT/.git" ]]; then
   echo "Cloning https://github.com/${REPO_SLUG}.git (branch: $BRANCH)"
+  # Remove any existing non-git directory at the target location
+  if [[ -d "$PROJECT_ROOT" && ! -d "$PROJECT_ROOT/.git" ]]; then
+    echo "Removing existing non-git directory at $PROJECT_ROOT"
+    rm -rf "$PROJECT_ROOT"
+  fi
   sudo -u "$USER_NAME" git clone --branch "$BRANCH" --depth 1 \
     "https://github.com/${REPO_SLUG}.git" "$PROJECT_ROOT"
 else
@@ -56,6 +59,10 @@ else
   sudo -u "$USER_NAME" git pull --ff-only
   popd >/dev/null
 fi
+
+# Ensure required directories exist after clone
+mkdir -p "$PROJECT_ROOT"/{media/audio,logs,subtitles,models}
+chown -R "$USER_NAME":"$USER_NAME" "$PROJECT_ROOT"
 
 echo "[5/7] Firewall rules (UFW)..."
 ufw allow OpenSSH
