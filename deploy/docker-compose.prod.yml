@@ -1,22 +1,22 @@
 # Production stack for Transcript app (app + Postgres + Redis + optional pgAdmin)
-# - Uses prebuilt images (change image names to yours)
-# - Persists all data under /srv/transcript on the host
-# - Exposes only the app port by default
+# Persists data via named volumes (you can bind-mount to /srv/transcript if you prefer).
+# Exposes only Traefik (80/443) and Portainer HTTPS (9443). App is behind Traefik.
+
+name: ${PROJECT_NAME:-transcript}
 
 services:
   app:
-    # Build from local source on the server (recommended when pushing code to Git and pulling there)
+    # Build from local source on the server
     build:
       context: ..
       dockerfile: docker/Dockerfile.backend
-    # Optionally tag the built image with a name (keeps compatibility if you also want to push/pull later)
+    # Optional tag for the built image
     image: ${IMAGE:-transcript-app:local}
     container_name: transcript-app
     restart: unless-stopped
     env_file:
       - ./.env
     environment:
-      # Sensible server defaults; override via .env when needed
       PYTHONUNBUFFERED: "1"
       PYTHONPATH: /app
       AUDIO_STORAGE_PATH: /app/media/audio
@@ -27,27 +27,30 @@ services:
       - ../logs:/app/logs
       - ../subtitles:/app/subtitles
       - ../models:/app/models
-    # Behind Traefik reverse proxy; no direct host port exposure
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.trans.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.trans.entrypoints=websecure"
       - "traefik.http.routers.trans.tls.certresolver=le"
-      # Optional HTTP->HTTPS redirect
+      - "traefik.docker.network=${PROJECT_NAME:-transcript}_proxy"
+      # HTTP -> HTTPS redirect (permanent)
       - "traefik.http.routers.trans-web.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.trans-web.entrypoints=web"
-      - "traefik.http.routers.trans-web.middlewares=redirect-https"
+      - "traefik.http.routers.trans-web.middlewares=redirect-https@docker"
       - "traefik.http.middlewares.redirect-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-https.redirectscheme.permanent=true"
       # Service port inside the container
       - "traefik.http.services.trans.loadbalancer.server.port=8000"
     networks:
-      # Must be on both networks:
-      # - default: to reach internal services like db/redis by hostname
-      # - proxy: to be discoverable by Traefik reverse proxy
       - default
       - proxy
+    # Healthcheck that doesn't require curl to be present
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health" ]
+      test:
+        [
+          "CMD-SHELL",
+          "python - <<'PY'\nimport urllib.request,sys\ntry:\n  urllib.request.urlopen('http://localhost:8000/health',timeout=3)\n  print('OK')\nexcept Exception as e:\n  print(e); sys.exit(1)\nPY"
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -60,6 +63,18 @@ services:
       nofile:
         soft: 65535
         hard: 65535
+    # Hardening
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"   # ensure your Dockerfile creates uid:gid 1000 and fixes ownership
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     deploy:
       resources:
         limits:
@@ -69,17 +84,25 @@ services:
           cpus: "1.0"
           memory: 3g
 
-  # Portainer for Docker management (optional; secure access with SG/Firewall)
+  # Portainer for Docker management (optional; restrict at network/firewall level)
   portainer:
     image: portainer/portainer-ce:latest
     container_name: transcript-portainer
     restart: unless-stopped
     ports:
-      - "9000:9000"   # HTTP UI (disable in prod or restrict)
-      - "9443:9443"   # HTTPS UI (preferred)
+      # Prefer HTTPS only
+      - "9443:9443"
+    command:
+      - --http-disabled
+      - --assets-dir=/public
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   db:
     image: postgres:15-alpine
@@ -93,27 +116,50 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
       - ../scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
-    # Do NOT publish 5432 in production unless you really need remote DB access
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-seminar_user} -d ${POSTGRES_DB:-seminar_platform}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    shm_size: "256m"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 2g
 
   redis:
     image: redis:7-alpine
     container_name: transcript-redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --requirepass
+      - ${REDIS_PASSWORD:?set_in_.env}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
-  # Optional: pgAdmin for DB inspection (expose only if needed)
+  # Optional: pgAdmin for DB inspection (no exposed ports by default)
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: transcript-pgadmin
@@ -126,12 +172,14 @@ services:
     volumes:
       - pgadmin_data:/var/lib/pgadmin
       - ../scripts/servers.json:/pgadmin4/servers.json:ro
-    # Publish only if you need it and restrict via SG/firewall
-    # ports:
-    #   - "5050:80"
     depends_on:
       db:
         condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Traefik reverse proxy with automatic Let's Encrypt (TLS)
   traefik:
@@ -141,6 +189,8 @@ services:
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
+      # If you set this, you can omit the app's traefik.docker.network label:
+      # - --providers.docker.network=${PROJECT_NAME:-transcript}_proxy
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       - --certificatesresolvers.le.acme.email=${TRAEFIK_ACME_EMAIL}
@@ -153,9 +203,15 @@ services:
       - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik/letsencrypt:/letsencrypt
+      # Mount a single acme.json file so 0600 perms are preserved
+      - ./traefik/letsencrypt/acme.json:/letsencrypt/acme.json
     networks:
       - proxy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
 volumes:
   db_data:
@@ -164,8 +220,9 @@ volumes:
   portainer_data:
 
 networks:
-  # Default internal network where app, db, redis, and pgadmin can talk to each other
   default:
     driver: bridge
+    name: ${PROJECT_NAME:-transcript}_default
   proxy:
     driver: bridge
+    name: ${PROJECT_NAME:-transcript}_proxy
