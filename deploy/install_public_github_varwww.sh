@@ -5,7 +5,7 @@
 #   sudo REPO_SLUG="ddeshar/transcript" BRANCH="main" bash deploy/install_public_github_varwww.sh
 #
 # Optional envs:
-#   PROJECT_ROOT (/var/www/transcript), OPEN_PORTAINER (0/1), OPEN_PGADMIN (0/1)
+#   PROJECT_ROOT (/var/www/transcript)
 
 set -euo pipefail
 
@@ -19,14 +19,22 @@ BRANCH=${BRANCH:-main}
 PROJECT_ROOT=${PROJECT_ROOT:-/var/www/transcript}
 USER_NAME=${SUDO_USER:-ubuntu}
 
-# Optional ports for tooling
-OPEN_PORTAINER=${OPEN_PORTAINER:-1}
-OPEN_PGADMIN=${OPEN_PGADMIN:-0}
+# If the specified USER_NAME doesn't exist (e.g., script run directly as root), fall back to root
+if ! id -u "$USER_NAME" >/dev/null 2>&1; then
+  USER_NAME=root
+fi
 
-echo "[1/7] Installing base dependencies (git, ufw, jq)..."
-apt-get update -y && apt-get install -y ca-certificates curl gnupg lsb-release git ufw jq
+# Helper for running commands as the target user (no-op if root)
+if [[ "$USER_NAME" == "root" ]]; then
+  RUN_AS=""
+else
+  RUN_AS="sudo -u $USER_NAME"
+fi
 
-echo "[2/7] Installing Docker Engine + Compose..."
+echo "[1/6] Installing base dependencies (git, curl, gnupg)..."
+apt-get update -y && apt-get install -y ca-certificates curl gnupg lsb-release git
+
+echo "[2/6] Installing Docker Engine + Compose..."
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 chmod a+r /etc/apt/keyrings/docker.gpg
@@ -35,55 +43,60 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.
 apt-get update -y
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 systemctl enable docker && systemctl start docker
-usermod -aG docker "$USER_NAME" || true
+if [[ "$USER_NAME" != "root" ]]; then
+  usermod -aG docker "$USER_NAME" || true
+fi
 
-echo "[3/7] Creating /var/www directory structure..."
+echo "[3/6] Creating /var/www directory structure..."
 mkdir -p /var/www
 chown -R "$USER_NAME":"$USER_NAME" /var/www
 
-echo "[4/7] Cloning public repository..."
-# Always check and clean up if directory exists but isn't a git repo
-if [[ -d "$PROJECT_ROOT" && ! -d "$PROJECT_ROOT/.git" ]]; then
-  echo "Removing existing non-git directory at $PROJECT_ROOT"
-  rm -rf "$PROJECT_ROOT"
-fi
+echo "[4/6] Cloning or updating public repository..."
+# Determine expected remote URL
+EXPECTED_REMOTE="https://github.com/${REPO_SLUG}.git"
 
-if [[ ! -d "$PROJECT_ROOT/.git" ]]; then
-  echo "Cloning https://github.com/${REPO_SLUG}.git (branch: $BRANCH)"
-  sudo -u "$USER_NAME" git clone --branch "$BRANCH" --depth 1 \
-    "https://github.com/${REPO_SLUG}.git" "$PROJECT_ROOT"
+# If target exists
+if [[ -d "$PROJECT_ROOT" ]]; then
+  if [[ -d "$PROJECT_ROOT/.git" ]]; then
+    # It's a git repo; verify remote
+    EXISTING_REMOTE=$($RUN_AS git -C "$PROJECT_ROOT" remote get-url origin 2>/dev/null || echo "")
+    if [[ "$EXISTING_REMOTE" != "$EXPECTED_REMOTE" || -z "$EXISTING_REMOTE" ]]; then
+      echo "Existing repo remote ('$EXISTING_REMOTE') doesn't match expected ('$EXPECTED_REMOTE'). Replacing..."
+      rm -rf "$PROJECT_ROOT"
+      echo "Cloning $EXPECTED_REMOTE (branch: $BRANCH)"
+      $RUN_AS git clone --branch "$BRANCH" --depth 1 "$EXPECTED_REMOTE" "$PROJECT_ROOT"
+    else
+      echo "Repo exists with expected remote, updating..."
+      $RUN_AS git -C "$PROJECT_ROOT" fetch --all --prune
+      $RUN_AS git -C "$PROJECT_ROOT" checkout "$BRANCH"
+      $RUN_AS git -C "$PROJECT_ROOT" pull --ff-only
+    fi
+  else
+    # Directory exists but isn't a git repo; remove and clone afresh
+    echo "Removing existing non-git directory at $PROJECT_ROOT"
+    rm -rf "$PROJECT_ROOT"
+    echo "Cloning $EXPECTED_REMOTE (branch: $BRANCH)"
+    $RUN_AS git clone --branch "$BRANCH" --depth 1 "$EXPECTED_REMOTE" "$PROJECT_ROOT"
+  fi
 else
-  echo "Repo exists, pulling latest..."
-  pushd "$PROJECT_ROOT" >/dev/null
-  sudo -u "$USER_NAME" git fetch --all --prune
-  sudo -u "$USER_NAME" git checkout "$BRANCH"
-  sudo -u "$USER_NAME" git pull --ff-only
-  popd >/dev/null
+  # Target doesn't exist; clone fresh
+  echo "Cloning $EXPECTED_REMOTE (branch: $BRANCH)"
+  $RUN_AS git clone --branch "$BRANCH" --depth 1 "$EXPECTED_REMOTE" "$PROJECT_ROOT"
 fi
 
 # Ensure required directories exist after clone
 mkdir -p "$PROJECT_ROOT"/{media/audio,logs,subtitles,models}
 chown -R "$USER_NAME":"$USER_NAME" "$PROJECT_ROOT"
 
-echo "[5/7] Firewall rules (UFW)..."
-ufw allow OpenSSH
-ufw allow 80/tcp     # App HTTP (standard port, no :8000 needed)
-if [[ "$OPEN_PORTAINER" == "1" ]]; then
-  ufw allow 9000/tcp # Portainer HTTP (optional)
-  # ufw allow 9443/tcp # Portainer HTTPS (prefer if you configure certs)
-fi
-if [[ "$OPEN_PGADMIN" == "1" ]]; then
-  ufw allow 5050/tcp # pgAdmin (optional)
-fi
-ufw --force enable
+echo "[5/6] Skipping firewall configuration (per request)."
 
-echo "[6/7] Ensuring env file..."
+echo "[6/6] Ensuring env file..."
 if [[ ! -f "$PROJECT_ROOT/deploy/.env" && -f "$PROJECT_ROOT/deploy/.env.example" ]]; then
   cp "$PROJECT_ROOT/deploy/.env.example" "$PROJECT_ROOT/deploy/.env"
   echo "Created default .env at $PROJECT_ROOT/deploy/.env — edit credentials as needed."
 fi
 
-echo "[7/7] Building and starting the stack..."
+echo "Building and starting the stack..."
 pushd "$PROJECT_ROOT/deploy" >/dev/null
 docker compose -f docker-compose.prod.yml up -d --build
 popd >/dev/null
