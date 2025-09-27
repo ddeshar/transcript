@@ -13,7 +13,7 @@ if [[ $(id -u) -ne 0 ]]; then
 fi
 
 USER_NAME=${SUDO_USER:-ubuntu}
-PROJECT_ROOT=/srv/transcript
+PROJECT_ROOT=${PROJECT_ROOT:-/var/www/transcript}
 
 REPO_URL=${REPO_URL:-}
 REPO_BRANCH=${REPO_BRANCH:-main}
@@ -37,7 +37,9 @@ systemctl enable docker && systemctl start docker
 usermod -aG docker "$USER_NAME" || true
 
 echo "[4/8] Creating directories..."
+mkdir -p /var/www
 mkdir -p "$PROJECT_ROOT"/{media/audio,logs,subtitles,models,deploy}
+chown -R "$USER_NAME":"$USER_NAME" /var/www
 chown -R "$USER_NAME":"$USER_NAME" "$PROJECT_ROOT"
 
 echo "[5/8] Fetching project from Git (optional) ..."
@@ -63,7 +65,6 @@ echo "[6/8] Configuring firewall..."
 ufw allow OpenSSH
 ufw allow 80/tcp
 ufw allow 443/tcp
-ufw allow 8000/tcp
 # Comment out these lines in production if you don’t want them exposed
 # ufw allow 5432/tcp  # Postgres
 # ufw allow 6379/tcp  # Redis

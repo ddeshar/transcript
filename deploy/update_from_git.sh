@@ -5,7 +5,7 @@ set -euo pipefail
 # Default branch is 'main'. Pulls latest, rebuilds, and restarts the stack.
 
 BRANCH=${1:-main}
-PROJECT_ROOT=${PROJECT_ROOT:-/srv/transcript}
+PROJECT_ROOT=${PROJECT_ROOT:-/var/www/transcript}
 COMPOSE_FILE=${COMPOSE_FILE:-$PROJECT_ROOT/deploy/docker-compose.prod.yml}
 
 echo "[1/3] Pulling latest from Git ($BRANCH) ..."
