@@ -1,16 +1,10 @@
-# Production stack for Transcript app (app + Postgres + Redis + optional pgAdmin)
-# Persists data via named volumes (you can bind-mount to /srv/transcript if you prefer).
-# Exposes only Traefik (80/443) and Portainer HTTPS (9443). App is behind Traefik.
-
 name: ${PROJECT_NAME:-transcript}
 
 services:
   app:
-    # Build from local source on the server
     build:
       context: ..
       dockerfile: docker/Dockerfile.backend
-    # Optional tag for the built image
     image: ${IMAGE:-transcript-app:local}
     container_name: transcript-app
     restart: unless-stopped
@@ -22,6 +16,8 @@ services:
       AUDIO_STORAGE_PATH: /app/media/audio
       LOG_DIR: /app/logs
       SUBTITLE_DIR: /app/subtitles
+      DATABASE_URL: ${DATABASE_URL:-postgresql://seminar_user:seminar_pass@db:5432/seminar_platform}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     volumes:
       - ../media:/app/media
       - ../logs:/app/logs
@@ -33,18 +29,15 @@ services:
       - "traefik.http.routers.trans.entrypoints=websecure"
       - "traefik.http.routers.trans.tls.certresolver=le"
       - "traefik.docker.network=${PROJECT_NAME:-transcript}_proxy"
-      # HTTP -> HTTPS redirect (permanent)
       - "traefik.http.routers.trans-web.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.trans-web.entrypoints=web"
       - "traefik.http.routers.trans-web.middlewares=redirect-https@docker"
       - "traefik.http.middlewares.redirect-https.redirectscheme.scheme=https"
       - "traefik.http.middlewares.redirect-https.redirectscheme.permanent=true"
-      # Service port inside the container
       - "traefik.http.services.trans.loadbalancer.server.port=8000"
     networks:
       - default
       - proxy
-    # Healthcheck that doesn't require curl to be present
     healthcheck:
       test:
         [
@@ -63,10 +56,9 @@ services:
       nofile:
         soft: 65535
         hard: 65535
-    # Hardening
     security_opt:
       - no-new-privileges:true
-    user: "1000:1000"   # ensure your Dockerfile creates uid:gid 1000 and fixes ownership
+    user: "1000:1000"
     read_only: true
     tmpfs:
       - /tmp:size=64m
@@ -84,13 +76,11 @@ services:
           cpus: "1.0"
           memory: 3g
 
-  # Portainer for Docker management (optional; restrict at network/firewall level)
   portainer:
     image: portainer/portainer-ce:latest
     container_name: transcript-portainer
     restart: unless-stopped
     ports:
-      # Prefer HTTPS only
       - "9443:9443"
     command:
       - --http-disabled
@@ -142,14 +132,10 @@ services:
       - "yes"
       - --appendfsync
       - everysec
-      - --requirepass
-      - ${REDIS_PASSWORD:?set_in_.env}
-    environment:
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -159,7 +145,6 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # Optional: pgAdmin for DB inspection (no exposed ports by default)
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: transcript-pgadmin
@@ -181,7 +166,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Traefik reverse proxy with automatic Let's Encrypt (TLS)
   traefik:
     image: traefik:v2.11
     container_name: transcript-traefik
@@ -189,8 +173,6 @@ services:
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
-      # If you set this, you can omit the app's traefik.docker.network label:
-      # - --providers.docker.network=${PROJECT_NAME:-transcript}_proxy
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       - --certificatesresolvers.le.acme.email=${TRAEFIK_ACME_EMAIL}
@@ -203,7 +185,6 @@ services:
       - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Mount a single acme.json file so 0600 perms are preserved
       - ./traefik/letsencrypt/acme.json:/letsencrypt/acme.json
     networks:
       - proxy
