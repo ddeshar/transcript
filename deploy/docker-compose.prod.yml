@@ -81,10 +81,8 @@ services:
     container_name: transcript-portainer
     restart: unless-stopped
     ports:
-      - "9443:9443"
-    command:
-      - --http-disabled
-      - --assets-dir=/public
+      - "9000:9000"   # HTTP UI
+      - "9443:9443"   # HTTPS UI (preferred)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
@@ -104,7 +102,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-seminar_pass}
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql/data
       - ../scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-seminar_user} -d ${POSTGRES_DB:-seminar_platform}"]
@@ -157,6 +155,8 @@ services:
     volumes:
       - pgadmin_data:/var/lib/pgadmin
       - ../scripts/servers.json:/pgadmin4/servers.json:ro
+    ports:
+      - "5050:80"     # Access pgAdmin at http://SERVER_IP:5050
     depends_on:
       db:
         condition: service_healthy
