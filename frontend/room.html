@@ -2192,13 +2192,153 @@
             
             console.log('Historical subtitles loaded successfully');
           } else {
-            console.log('No historical subtitles found');
+            console.log('No historical subtitles found, trying fallback methods...');
+            await loadFallbackSubtitles();
           }
         } else {
           console.error('Failed to fetch subtitles:', response.status);
+          console.log('Trying fallback subtitle loading...');
+          await loadFallbackSubtitles();
         }
       } catch (error) {
         console.error('Failed to load historical subtitles:', error);
+        console.log('Trying fallback subtitle loading...');
+        await loadFallbackSubtitles();
+      }
+    }
+
+    async function loadFallbackSubtitles() {
+      try {
+        console.log('Loading fallback subtitles from alternative sources...');
+        
+        // Try to get audio files list to determine how many segments exist
+        const audioResponse = await fetch(`/api/rooms/${roomId}/audio/files`);
+        if (audioResponse.ok) {
+          const audioData = await audioResponse.json();
+          console.log(`Found ${audioData.files.length} audio files for fallback`);
+          
+          // Create placeholder subtitles based on audio files
+          if (audioData.files.length > 0) {
+            // Clear existing history first
+            if (elements.subtitleHistory) {
+              elements.subtitleHistory.innerHTML = '';
+            }
+            
+            // Group files by segment ID
+            const segmentMap = new Map();
+            audioData.files.forEach(file => {
+              if (!segmentMap.has(file.segment_id)) {
+                segmentMap.set(file.segment_id, {});
+              }
+              segmentMap.get(file.segment_id)[file.language] = file;
+            });
+            
+            // Create placeholder historical subtitles for segments in reverse order
+            const sortedSegments = Array.from(segmentMap.keys()).sort((a, b) => b - a);
+            sortedSegments.forEach((segmentId, index) => {
+              const segmentFiles = segmentMap.get(segmentId);
+              const estimatedTime = Date.now() - (index * 5000); // Estimate 5s per segment
+              
+              // Add to audio storage for potential playback
+              if (segmentFiles.en) {
+                audioStorage.set(`segment_${segmentId}`, {
+                  englishAudioBase64: null, // Will be loaded on demand
+                  thaiAudioBase64: null,    // Will be loaded on demand
+                  englishAudioFile: segmentFiles.en.filename,
+                  thaiAudioFile: segmentFiles.th ? segmentFiles.th.filename : null
+                });
+              }
+              
+              addHistoricalSubtitleToHistory({
+                timestamp_ms: estimatedTime,
+                thai: segmentFiles.th ? `[Thai Audio - Segment ${segmentId}]` : `[Audio Segment ${segmentId} - Thai track not available]`,
+                english: segmentFiles.en ? `[English Audio - Segment ${segmentId}]` : `[Audio Segment ${segmentId} - English track not available]`,
+                segment_id: segmentId  // Include segment ID for audio playback
+              });
+            });
+            
+            // Set a meaningful current subtitle
+            if (audioData.files.length > 0) {
+              const maxSegment = Math.max(...segmentMap.keys());
+              latestSubtitle = {
+                thai: `[Previous session recovered - ${maxSegment} segments available]`,
+                english: `[Previous session recovered - ${maxSegment} segments available]`,
+                timestamp_ms: Date.now()
+              };
+              updateCurrentSubtitle(latestSubtitle);
+            }
+            
+            console.log(`Created ${sortedSegments.length} placeholder subtitle entries from audio files`);
+          }
+        } else {
+          console.log('No audio files found for fallback');
+          showFallbackMessage();
+        }
+        
+      } catch (error) {
+        console.error('Fallback subtitle loading also failed:', error);
+        showFallbackMessage();
+      }
+    }
+
+    function showFallbackMessage() {
+      // Last resort: show a message that the session exists but subtitles are not available
+      if (elements.subtitleHistory) {
+        elements.subtitleHistory.innerHTML = `
+          <div class="history-item" style="text-align: center; padding: 20px; opacity: 0.7;">
+            <div class="history-time">Session Recovery</div>
+            <div class="history-english">Previous session found but subtitles unavailable after refresh.</div>
+            <div class="history-thai">เซสชันก่อนหน้าพบแต่ไม่สามารถแสดงซับไตเติ้ลได้หลังจากรีเฟรช</div>
+            <div style="margin-top: 10px; font-size: 0.9em;">
+              <i class="fas fa-info-circle"></i> New subtitles will appear when the session resumes
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    async function playAudioSegment(segmentId, subtitleData) {
+      try {
+        console.log(`Playing audio segment ${segmentId}`);
+        
+        // Update current subtitle display
+        if (subtitleData) {
+          elements.currentThai.textContent = subtitleData.thai || '';
+          elements.currentEnglish.textContent = subtitleData.english || '';
+          elements.currentThai.style.display = showThaiSubtitles ? 'block' : 'none';
+          elements.currentEnglish.style.display = showEnglishSubtitles ? 'block' : 'none';
+        }
+
+        // Try to play English audio first (since we know these files exist)
+        const englishResponse = await fetch(`/api/rooms/${roomId}/audio/${segmentId}/en`);
+        if (englishResponse.ok) {
+          const audioBlob = await englishResponse.blob();
+          const audioUrl = URL.createObjectURL(audioBlob);
+          
+          // Stop any current audio
+          if (currentAudio) {
+            currentAudio.pause();
+            currentAudio = null;
+          }
+          
+          // Play the audio
+          currentAudio = new Audio(audioUrl);
+          currentAudio.play().catch(error => {
+            console.error('Error playing segment audio:', error);
+          });
+          
+          // Clean up URL when audio ends
+          currentAudio.addEventListener('ended', () => {
+            URL.revokeObjectURL(audioUrl);
+          });
+          
+          console.log(`Playing English audio for segment ${segmentId}`);
+        } else {
+          console.log(`No audio found for segment ${segmentId}`);
+        }
+        
+      } catch (error) {
+        console.error('Error playing audio segment:', error);
       }
     }
 
@@ -2220,26 +2360,34 @@
         <div class="history-english" style="display: ${showEnglishSubtitles ? 'block' : 'none'}">${data.english || ''}</div>
       `;
       
-      // Add click handler to show this subtitle as current and play audio
+      // Add click handler to play consecutive audio from this point
       historyItem.addEventListener('click', function() {
-        elements.currentThai.textContent = data.thai || '';
-        elements.currentEnglish.textContent = data.english || '';
-        elements.currentThai.style.display = 'block';
-        elements.currentEnglish.style.display = 'block';
-        
         // Hide no subtitle message
         const noSubtitleMsg = document.getElementById('noSubtitleMessage');
         if (noSubtitleMsg) {
           noSubtitleMsg.style.display = 'none';
         }
         
-        // Play audio if available
+        // Check if this is a fallback subtitle with segment ID
+        if (data.segment_id) {
+          console.log(`Playing audio for fallback segment: ${data.segment_id}`);
+          playAudioSegment(data.segment_id, data);
+          return;
+        }
+        
+        // Play consecutive audio from this timestamp onwards
         const timestamp = data.timestamp_ms;
         if (timestamp && audioStorage.has(timestamp)) {
-          const audioData = audioStorage.get(timestamp);
-          playThaiAudio(audioData.audioBase64, audioData.format);
+          console.log(`Starting consecutive playback from timestamp: ${timestamp}`);
+          playConsecutiveAudio(timestamp);
         } else {
-          // Try to generate Thai audio for this text
+          // Fallback: show this subtitle and try to generate audio
+          elements.currentThai.textContent = data.thai || '';
+          elements.currentEnglish.textContent = data.english || '';
+          elements.currentThai.style.display = showThaiSubtitles ? 'block' : 'none';
+          elements.currentEnglish.style.display = showEnglishSubtitles ? 'block' : 'none';
+          
+          // Try to generate Thai audio for this text only
           generateAndPlayThaiAudio(data.thai || data.english);
         }
       });
@@ -2480,10 +2628,11 @@
       updateCurrentSubtitle(data);
       
       // Store audio data for historical playback
-      if (data.type === 'final' && data.audio && data.audio.thai_audio_base64) {
+      if (data.type === 'final' && data.audio && (data.audio.thai_audio_base64 || data.audio.english_audio_base64)) {
         const timestamp = data.timestamp_ms || Date.now();
         audioStorage.set(timestamp, {
-          audioBase64: data.audio.thai_audio_base64,
+          thaiAudioBase64: data.audio.thai_audio_base64 || null,
+          englishAudioBase64: data.audio.english_audio_base64 || null,
           format: data.audio.audio_format || 'mp3',
           thai: data.thai,
           english: data.english
@@ -2495,8 +2644,15 @@
           audioStorage.delete(oldestKey);
         }
         
-        // Play Thai audio if available and final
-        playThaiAudio(data.audio.thai_audio_base64, data.audio.audio_format);
+        // Play Thai audio if available and final (default behavior)
+        if (data.audio.thai_audio_base64 && currentAudioLanguage === 'thai') {
+          playThaiAudio(data.audio.thai_audio_base64, data.audio.audio_format);
+        }
+        
+        // Play English audio if selected and available
+        if (data.audio.english_audio_base64 && currentAudioLanguage === 'english') {
+          playThaiAudio(data.audio.english_audio_base64, data.audio.audio_format); // Reuse same function
+        }
       }
       
       // Don't auto-hide - let final results persist
@@ -2557,26 +2713,27 @@
           <div class="history-english" style="display: ${showEnglishSubtitles ? 'block' : 'none'}">${latestSubtitle.english || ''}</div>
         `;
         
-        // Add click handler to show this subtitle as current and play audio
+        // Add click handler to play consecutive audio from this point
         historyItem.addEventListener('click', function() {
-          elements.currentThai.textContent = latestSubtitle.thai || '';
-          elements.currentEnglish.textContent = latestSubtitle.english || '';
-          elements.currentThai.style.display = 'block';
-          elements.currentEnglish.style.display = 'block';
-          
           // Hide no subtitle message
           const noSubtitleMsg = document.getElementById('noSubtitleMessage');
           if (noSubtitleMsg) {
             noSubtitleMsg.style.display = 'none';
           }
           
-          // Play audio if available
+          // Play consecutive audio from this timestamp onwards
           const timestamp = latestSubtitle.timestamp_ms;
           if (timestamp && audioStorage.has(timestamp)) {
-            const audioData = audioStorage.get(timestamp);
-            playThaiAudio(audioData.audioBase64, audioData.format);
+            console.log(`Starting consecutive playback from latest timestamp: ${timestamp}`);
+            playConsecutiveAudio(timestamp);
           } else {
-            // Try to generate Thai audio for this text
+            // Fallback: show this subtitle and try to generate audio
+            elements.currentThai.textContent = latestSubtitle.thai || '';
+            elements.currentEnglish.textContent = latestSubtitle.english || '';
+            elements.currentThai.style.display = showThaiSubtitles ? 'block' : 'none';
+            elements.currentEnglish.style.display = showEnglishSubtitles ? 'block' : 'none';
+            
+            // Try to generate Thai audio for this text only
             generateAndPlayThaiAudio(latestSubtitle.thai || latestSubtitle.english);
           }
         });
@@ -2784,6 +2941,136 @@
       } catch (error) {
         console.error('Error processing audio:', error);
       }
+    }
+
+    function playConsecutiveAudio(startTimestamp) {
+      if (!audioEnabled) return;
+      
+      // Get all audio segments from the clicked timestamp onwards
+      const sortedTimestamps = Array.from(audioStorage.keys()).sort((a, b) => a - b);
+      const startIndex = sortedTimestamps.findIndex(ts => ts >= startTimestamp);
+      
+      if (startIndex === -1) {
+        console.log('No audio found from the selected timestamp');
+        return;
+      }
+      
+      // Get segments from start point to latest
+      const segmentsToPlay = sortedTimestamps.slice(startIndex);
+      console.log(`Playing ${segmentsToPlay.length} consecutive audio segments from timestamp ${startTimestamp}`);
+      
+      let currentSegmentIndex = 0;
+      
+      function playNextSegment() {
+        if (currentSegmentIndex >= segmentsToPlay.length) {
+          console.log('Consecutive audio playback completed');
+          return;
+        }
+        
+        const timestamp = segmentsToPlay[currentSegmentIndex];
+        const audioData = audioStorage.get(timestamp);
+        
+        if (!audioData) {
+          currentSegmentIndex++;
+          playNextSegment();
+          return;
+        }
+        
+        try {
+          // Stop any currently playing audio
+          if (currentAudio) {
+            currentAudio.pause();
+            currentAudio = null;
+          }
+          
+          // Choose audio based on language preference (handle both new and old formats)
+          let audioBase64 = null;
+          
+          // New format with separate Thai and English audio
+          if (audioData.thaiAudioBase64 || audioData.englishAudioBase64) {
+            if (currentAudioLanguage === 'thai' && audioData.thaiAudioBase64) {
+              audioBase64 = audioData.thaiAudioBase64;
+            } else if (currentAudioLanguage === 'english' && audioData.englishAudioBase64) {
+              audioBase64 = audioData.englishAudioBase64;
+            } else if (audioData.thaiAudioBase64) {
+              audioBase64 = audioData.thaiAudioBase64; // Fallback to Thai
+            } else if (audioData.englishAudioBase64) {
+              audioBase64 = audioData.englishAudioBase64; // Fallback to English
+            }
+          }
+          // Old format compatibility (single audioBase64 field)
+          else if (audioData.audioBase64) {
+            audioBase64 = audioData.audioBase64;
+          }
+          
+          if (!audioBase64) {
+            currentSegmentIndex++;
+            playNextSegment();
+            return;
+          }
+          
+          // Create audio blob from base64
+          const audioDataBytes = atob(audioBase64);
+          const audioArray = new Uint8Array(audioDataBytes.length);
+          for (let i = 0; i < audioDataBytes.length; i++) {
+            audioArray[i] = audioDataBytes.charCodeAt(i);
+          }
+          
+          const mimeType = audioData.format === 'wav' ? 'audio/wav' : 'audio/mpeg';
+          const audioBlob = new Blob([audioArray], { type: mimeType });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          
+          // Create and play audio
+          currentAudio = new Audio(audioUrl);
+          currentAudio.volume = 0.8;
+          
+          // Update current subtitle display to show what's playing
+          if (audioData.thai || audioData.english) {
+            const thaiText = audioData.thai || '';
+            const englishText = audioData.english || '';
+            
+            // Add playback indicator for consecutive mode
+            const playbackIndicator = `🔊 (${currentSegmentIndex + 1}/${segmentsToPlay.length}) `;
+            
+            elements.currentThai.textContent = thaiText ? playbackIndicator + thaiText : '';
+            elements.currentEnglish.textContent = englishText ? playbackIndicator + englishText : '';
+            elements.currentThai.style.display = showThaiSubtitles ? 'block' : 'none';
+            elements.currentEnglish.style.display = showEnglishSubtitles ? 'block' : 'none';
+          }
+          
+          currentAudio.onended = () => {
+            URL.revokeObjectURL(audioUrl);
+            currentAudio = null;
+            currentSegmentIndex++;
+            // Play next segment after a short delay
+            setTimeout(playNextSegment, 100);
+          };
+          
+          currentAudio.onerror = (e) => {
+            console.error('Audio playback error:', e);
+            URL.revokeObjectURL(audioUrl);
+            currentAudio = null;
+            currentSegmentIndex++;
+            playNextSegment();
+          };
+          
+          currentAudio.play().catch(e => {
+            console.error('Failed to play audio:', e);
+            URL.revokeObjectURL(audioUrl);
+            currentAudio = null;
+            currentSegmentIndex++;
+            playNextSegment();
+          });
+          
+        } catch (error) {
+          console.error('Error processing consecutive audio:', error);
+          currentSegmentIndex++;
+          playNextSegment();
+        }
+      }
+      
+      // Start playing from the selected segment
+      playNextSegment();
     }
 
     function updateTimelineAudio() {

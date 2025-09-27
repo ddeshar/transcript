@@ -1532,10 +1532,11 @@
           elements.lastUpdate.textContent = new Date().toLocaleTimeString();
           
           // Store audio data for historical playback (presenter)
-          if (data.audio && data.audio.thai_audio_base64) {
+          if (data.audio && (data.audio.thai_audio_base64 || data.audio.english_audio_base64)) {
             const timestamp = data.timestamp_ms || Date.now();
             audioStorage.set(timestamp, {
-              audioBase64: data.audio.thai_audio_base64,
+              thaiAudioBase64: data.audio.thai_audio_base64 || null,
+              englishAudioBase64: data.audio.english_audio_base64 || null,
               format: data.audio.audio_format || 'mp3',
               thai: data.thai,
               english: data.english
@@ -1548,7 +1549,14 @@
             }
             
             // Play Thai audio (presenter generates and plays audio)
-            playThaiAudioFromBase64(data.audio.thai_audio_base64, data.audio.audio_format || 'mp3');
+            if (data.audio.thai_audio_base64) {
+              playThaiAudioFromBase64(data.audio.thai_audio_base64, data.audio.audio_format || 'mp3');
+            }
+            
+            // Optionally play English audio (could add toggle for this)
+            // if (data.audio.english_audio_base64) {
+            //   playEnglishAudioFromBase64(data.audio.english_audio_base64, data.audio.audio_format || 'mp3');
+            // }
           }
           break;
           

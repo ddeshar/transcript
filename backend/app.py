@@ -438,6 +438,57 @@ async def synthesize_thai_audio_base64(thai_text: str) -> Optional[str]:
         return None
 
 
+async def synthesize_english_audio_base64(english_text: str) -> Optional[str]:
+    """Synthesize English audio and return as base64 for WebSocket streaming"""
+    try:
+        from .providers import create_tts_provider
+        from .providers.tts_base import TTSRequest
+        import base64
+        
+        if not english_text.strip():
+            return None
+        
+        # Get TTS provider configuration
+        tts_provider_name = os.getenv("TTS_PROVIDER", "mock")
+        
+        # Skip synthesis for disabled or mock providers
+        if tts_provider_name in ["disabled", "mock"]:
+            return None
+        
+        # Create TTS provider
+        tts_provider = create_tts_provider(tts_provider_name)
+        await tts_provider.setup()
+        
+        # Configure voice for English
+        voice_id = "alloy"  # Different voice for English
+        if tts_provider_name == "aws_polly":
+            voice_id = "Matthew"  # English male voice
+        
+        # Create TTS request
+        tts_request = TTSRequest(
+            text=english_text,
+            voice_id=voice_id,
+            speed=float(os.getenv("OPENAI_TTS_SPEED", "1.0")),
+            language="en"
+        )
+        
+        # Synthesize audio
+        audio_data = await tts_provider.synthesize(tts_request)
+        if audio_data:
+            # Convert to base64
+            return base64.b64encode(audio_data).decode('utf-8')
+        else:
+            return None
+            
+    except Exception as e:
+        jsonify_log("ERROR", {
+            "message": "Failed to synthesize English audio for streaming",
+            "error": str(e),
+            "text": english_text[:50] + "..."
+        })
+        return None
+
+
 async def get_room_audio_files(storage_path: str, room_id: str) -> list[dict]:
     """Get all audio files for a room with metadata"""
     room_path = os.path.join(storage_path, room_id)
@@ -1993,8 +2044,29 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                 room_id, sess_id
                             )
                             get_logger().info(
-                                f"Auto-linked session {sess_id} to room {room_id}"
+                                f"✅ PRESENTER linked session {sess_id} to room {room_id} - subtitles will be saved"
                             )
+                            
+                            # Send confirmation back to client
+                            await websocket.send_text(json.dumps({
+                                "type": "status",
+                                "message": f"Connected to room {room_id} - subtitles will be saved",
+                                "room_linked": True,
+                                "session_id": sess_id
+                            }))
+                        else:
+                            get_logger().error(
+                                f"❌ Room {room_id} not found - subtitles will NOT be saved"
+                            )
+                            await websocket.send_text(json.dumps({
+                                "type": "error",
+                                "message": f"Room {room_id} not found",
+                                "room_linked": False
+                            }))
+                    else:
+                        get_logger().warning(
+                            f"⚠️  No roomId provided in config - subtitles will NOT be saved"
+                        )
                     
                     if isinstance(sr, int) and sr > 0:
                         state.sample_rate = sr
@@ -2087,27 +2159,53 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         },
                     }
                     
-                    # Add Thai audio synthesis for final results
-                    if result.is_final and thai_text:
+                    # Add audio synthesis for final results (both Thai and English)
+                    if result.is_final:
                         try:
-                            audio_data = await synthesize_thai_audio_base64(thai_text)
-                            if audio_data:
+                            audio_dict = {}
+                            
+                            # Generate Thai audio
+                            if thai_text:
+                                thai_audio_data = await synthesize_thai_audio_base64(thai_text)
+                                if thai_audio_data:
+                                    audio_dict["thai_audio_base64"] = thai_audio_data
+                            
+                            # Generate English audio
+                            if source_english:
+                                english_audio_data = await synthesize_english_audio_base64(source_english)
+                                if english_audio_data:
+                                    audio_dict["english_audio_base64"] = english_audio_data
+                            
+                            if audio_dict:
                                 message["audio"] = {
-                                    "thai_audio_base64": audio_data,
+                                    **audio_dict,
                                     "audio_format": "mp3",
                                     "voice": "nova"
                                 }
                                 
-                                # Save Thai audio to file for timeline
+                                # Save audio files for timeline
                                 segment_id = result.segment_id or \
                                     f"{sess_id}-{result.end_ms}"
-                                audio_file_path = get_audio_file_path(
-                                    settings.audio_storage_path, sess_id,
-                                    hash(segment_id) % 1000000, "thai"
-                                )
-                                await save_thai_audio_to_file(
-                                    audio_data, audio_file_path, "mp3"
-                                )
+                                
+                                # Save Thai audio if available
+                                if thai_audio_data:
+                                    thai_path = get_audio_file_path(
+                                        settings.audio_storage_path, sess_id,
+                                        hash(segment_id) % 1000000, "th"
+                                    )
+                                    await save_thai_audio_to_file(
+                                        thai_audio_data, thai_path, "mp3"
+                                    )
+                                
+                                # Save English audio if available  
+                                if english_audio_data:
+                                    eng_path = get_audio_file_path(
+                                        settings.audio_storage_path, sess_id,
+                                        hash(segment_id) % 1000000, "en"
+                                    )
+                                    await save_thai_audio_to_file(
+                                        english_audio_data, eng_path, "mp3"
+                                    )
                                 
                         except Exception as e:
                             jsonify_log("WARNING", {
@@ -2133,29 +2231,57 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         },
                     }
                     
-                    # Add Thai audio synthesis for final results
-                    if result.is_final and translation.text:
+                    # Add audio synthesis for final results (both Thai and English)
+                    if result.is_final:
                         try:
-                            audio_data = await synthesize_thai_audio_base64(
-                                translation.text
-                            )
-                            if audio_data:
+                            audio_dict = {}
+                            
+                            # Generate Thai audio
+                            if translation.text:
+                                thai_audio_data = await synthesize_thai_audio_base64(
+                                    translation.text
+                                )
+                                if thai_audio_data:
+                                    audio_dict["thai_audio_base64"] = thai_audio_data
+                            
+                            # Generate English audio
+                            if english_text:
+                                english_audio_data = await synthesize_english_audio_base64(
+                                    english_text
+                                )
+                                if english_audio_data:
+                                    audio_dict["english_audio_base64"] = english_audio_data
+                            
+                            if audio_dict:
                                 message["audio"] = {
-                                    "thai_audio_base64": audio_data,
+                                    **audio_dict,
                                     "audio_format": "mp3",
                                     "voice": "nova"
                                 }
                                 
-                                # Save Thai audio to file for timeline
+                                # Save audio files for timeline
                                 segment_id = result.segment_id or \
                                     f"{sess_id}-{result.end_ms}"
-                                audio_file_path = get_audio_file_path(
-                                    settings.audio_storage_path, sess_id,
-                                    hash(segment_id) % 1000000, "thai"
-                                )
-                                await save_thai_audio_to_file(
-                                    audio_data, audio_file_path, "mp3"
-                                )
+                                
+                                # Save Thai audio if available
+                                if thai_audio_data:
+                                    thai_path = get_audio_file_path(
+                                        settings.audio_storage_path, sess_id,
+                                        hash(segment_id) % 1000000, "th"
+                                    )
+                                    await save_thai_audio_to_file(
+                                        thai_audio_data, thai_path, "mp3"
+                                    )
+                                
+                                # Save English audio if available
+                                if english_audio_data:
+                                    eng_path = get_audio_file_path(
+                                        settings.audio_storage_path, sess_id,
+                                        hash(segment_id) % 1000000, "en"
+                                    )
+                                    await save_thai_audio_to_file(
+                                        english_audio_data, eng_path, "mp3"
+                                    )
                                 
                         except Exception as e:
                             jsonify_log("WARNING", {
@@ -2200,6 +2326,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     # Save to database if linked to a room
                     if state.room_id:
                         try:
+                            get_logger().debug(
+                                f"💾 Saving subtitle segment to database for room {state.room_id}"
+                            )
                             # Save subtitle segment
                             await AsyncDatabaseService.save_subtitle_segment(
                                 room_id=state.room_id,
@@ -2335,13 +2464,27 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         room = await AsyncDatabaseService.get_room(room_id)
                         if room:
                             state.room_id = room_id
-                            # Always update presenter session with current session ID
-                            await AsyncDatabaseService.update_presenter_session(
-                                room_id, sess_id
-                            )
-                            get_logger().info(
-                                f"Linked session {sess_id} to room {room_id}"
-                            )
+                            # For participants, don't override presenter session
+                            # Only update if no presenter session exists
+                            if not room.presenter_session_id:
+                                await AsyncDatabaseService.update_presenter_session(
+                                    room_id, sess_id
+                                )
+                                get_logger().info(
+                                    f"🔗 PARTICIPANT linked as presenter for room {room_id}"
+                                )
+                            else:
+                                get_logger().info(
+                                    f"👥 PARTICIPANT joined room {room_id} (presenter: {room.presenter_session_id})"
+                                )
+                            
+                            # Send room info to participant
+                            await websocket.send_text(json.dumps({
+                                "type": "room_info",
+                                "room_id": room_id,
+                                "title": room.title,
+                                "is_live": room.is_live
+                            }))
                     
                     if isinstance(sr, int) and sr > 0:
                         jsonify_log("INFO", {

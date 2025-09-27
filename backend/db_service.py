@@ -203,6 +203,32 @@ class DatabaseService:
         return segment
 
     @staticmethod
+    def update_subtitle_segment_text(
+        db: Session,
+        room_id: str,
+        segment_id: str,
+        text_en: str = None,
+        text_th: str = None
+    ) -> SubtitleSegment:
+        """Update text content of an existing subtitle segment."""
+        segment = db.query(SubtitleSegment).filter(
+            SubtitleSegment.room_id == room_id,
+            SubtitleSegment.segment_id == segment_id
+        ).first()
+        
+        if segment:
+            if text_en is not None:
+                segment.text_en = text_en
+            if text_th is not None:
+                segment.text_th = text_th
+            
+            db.commit()
+            db.refresh(segment)
+            return segment
+        else:
+            raise ValueError(f"Subtitle segment not found: {room_id}/{segment_id}")
+
+    @staticmethod
     def get_audio_segments(
         db: Session, 
         room_id: str,
@@ -453,6 +479,22 @@ class AsyncDatabaseService:
                 db.close()
                 
         return await cls.execute_sync(_get_subtitles)
+
+    @classmethod
+    async def update_subtitle_segment_text(
+        cls, room_id: str, segment_id: str, text_en: str = None, text_th: str = None
+    ) -> SubtitleSegment:
+        """Async update subtitle segment text."""
+        def _update_text():
+            db = next(get_db())
+            try:
+                return DatabaseService.update_subtitle_segment_text(
+                    db, room_id, segment_id, text_en, text_th
+                )
+            finally:
+                db.close()
+                
+        return await cls.execute_sync(_update_text)
 
     @classmethod
     async def update_presenter_session(
