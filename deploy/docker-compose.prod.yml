@@ -58,10 +58,8 @@ services:
         hard: 65535
     security_opt:
       - no-new-privileges:true
-    user: "1000:1000"
-    read_only: true
-    tmpfs:
-      - /tmp:size=64m
+    # Note: hardening options (non-root user, read-only FS) temporarily disabled
+    # to avoid startup issues; re-enable after first successful boot.
     logging:
       driver: json-file
       options:
