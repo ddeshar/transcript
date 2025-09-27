@@ -20,6 +20,7 @@ from fastapi import (
     HTTPException,
     Depends,
     status,
+    Request,
 )
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
@@ -98,6 +99,17 @@ class Settings(BaseSettings):
         case_sensitive = False
         env_file = ".env"
         extra = "ignore"
+# Helper to resolve the public base URL for links
+def resolve_base_url(request: "Request") -> str:
+    # Prefer explicit env override, else derive from incoming request
+    env_base = os.getenv("BASE_URL")
+    if env_base:
+        return env_base.rstrip("/")
+    try:
+        return str(request.base_url).rstrip("/")
+    except Exception:
+        # Sensible default if request context not available
+        return "http://localhost:8000"
 
 
 # Audio storage utilities
@@ -1528,7 +1540,7 @@ class RoomResponse(BaseModel):
 
 
 @app.post("/api/rooms", response_model=RoomResponse)
-async def create_room(request: CreateRoomRequest, current_user: dict = Depends(get_current_user_dep)) -> RoomResponse:
+async def create_room(request: CreateRoomRequest, current_user: dict = Depends(get_current_user_dep), http_request: Request | None = None) -> RoomResponse:
     """Create a new seminar room. Requires authentication."""
     # Create room in database
     room = await AsyncDatabaseService.create_room(
@@ -1538,8 +1550,8 @@ async def create_room(request: CreateRoomRequest, current_user: dict = Depends(g
         max_participants=request.max_participants
     )
     
-    # Get base URL from environment or request
-    base_url = os.getenv("BASE_URL", "http://localhost:8000")
+    # Get base URL from request (or env override)
+    base_url = resolve_base_url(http_request) if http_request else os.getenv("BASE_URL", "http://localhost:8000")
     return RoomResponse(
         room_id=room.room_id,
         title=room.title,
@@ -1559,9 +1571,9 @@ async def create_room(request: CreateRoomRequest, current_user: dict = Depends(g
 
 
 @app.get("/api/rooms", response_model=list[RoomResponse])
-async def list_rooms() -> list[RoomResponse]:
+async def list_rooms(http_request: Request | None = None) -> list[RoomResponse]:
     """List all seminar rooms."""
-    base_url = "http://localhost:8000"  # In production, get from request
+    base_url = resolve_base_url(http_request) if http_request else "http://localhost:8000"
     rooms_data = await AsyncDatabaseService.list_rooms()
     rooms = []
     
@@ -1588,12 +1600,12 @@ async def list_rooms() -> list[RoomResponse]:
 
 
 @app.get("/api/rooms/{room_id}", response_model=RoomResponse)
-async def get_room(room_id: str) -> RoomResponse:
+async def get_room(room_id: str, http_request: Request | None = None) -> RoomResponse:
     """Get details of a specific room."""
     room = await AsyncDatabaseService.get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    base_url = "http://localhost:8000"  # In production, get from request
+    base_url = resolve_base_url(http_request) if http_request else "http://localhost:8000"
     
     return RoomResponse(
         room_id=room.room_id,
