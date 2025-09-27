@@ -1540,18 +1540,18 @@ class RoomResponse(BaseModel):
 
 
 @app.post("/api/rooms", response_model=RoomResponse)
-async def create_room(request: CreateRoomRequest, current_user: dict = Depends(get_current_user_dep), http_request: Request | None = None) -> RoomResponse:
+async def create_room(payload: CreateRoomRequest, request: Request, current_user: dict = Depends(get_current_user_dep)) -> RoomResponse:
     """Create a new seminar room. Requires authentication."""
     # Create room in database
     room = await AsyncDatabaseService.create_room(
-        title=request.title,
-        description=request.description,
-        password=request.password,
-        max_participants=request.max_participants
+        title=payload.title,
+        description=payload.description,
+        password=payload.password,
+        max_participants=payload.max_participants
     )
     
     # Get base URL from request (or env override)
-    base_url = resolve_base_url(http_request) if http_request else os.getenv("BASE_URL", "http://localhost:8000")
+    base_url = resolve_base_url(request)
     return RoomResponse(
         room_id=room.room_id,
         title=room.title,
@@ -1571,9 +1571,9 @@ async def create_room(request: CreateRoomRequest, current_user: dict = Depends(g
 
 
 @app.get("/api/rooms", response_model=list[RoomResponse])
-async def list_rooms(http_request: Request | None = None) -> list[RoomResponse]:
+async def list_rooms(request: Request) -> list[RoomResponse]:
     """List all seminar rooms."""
-    base_url = resolve_base_url(http_request) if http_request else "http://localhost:8000"
+    base_url = resolve_base_url(request)
     rooms_data = await AsyncDatabaseService.list_rooms()
     rooms = []
     
@@ -1600,12 +1600,12 @@ async def list_rooms(http_request: Request | None = None) -> list[RoomResponse]:
 
 
 @app.get("/api/rooms/{room_id}", response_model=RoomResponse)
-async def get_room(room_id: str, http_request: Request | None = None) -> RoomResponse:
+async def get_room(room_id: str, request: Request) -> RoomResponse:
     """Get details of a specific room."""
     room = await AsyncDatabaseService.get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    base_url = resolve_base_url(http_request) if http_request else "http://localhost:8000"
+    base_url = resolve_base_url(request)
     
     return RoomResponse(
         room_id=room.room_id,
