@@ -98,20 +98,34 @@ else
     cp "$PROJECT_ROOT/deploy/.env.example" "$PROJECT_ROOT/deploy/.env"
     echo "Created .env from .env.example at $PROJECT_ROOT/deploy/.env"
   else
-    cat > "$PROJECT_ROOT/deploy/.env" <<'EOF'
+  cat > "$PROJECT_ROOT/deploy/.env" <<'EOF'
 # Transcript production .env (created automatically)
-# You can override any service env here. Safe defaults are used if unset.
-# Example DB settings (used by postgres service):
-# POSTGRES_DB=seminar_platform
-# POSTGRES_USER=seminar_user
-# POSTGRES_PASSWORD=seminar_pass
-# Example pgAdmin settings (only if you enable pgAdmin ports):
+# Safe defaults are used so the stack can start immediately. Review and adjust as needed.
+
+# Core service URLs
+DATABASE_URL=postgresql://seminar_user:seminar_pass@db:5432/seminar_platform
+REDIS_URL=redis://redis:6379/0
+
+# Providers (disable cloud by default for first run)
+ASR_PROVIDER=mock
+MT_PROVIDER=mock
+TTS_PROVIDER=disabled
+
+# Optional: pgAdmin (only relevant if you expose pgAdmin ports)
 # PGADMIN_DEFAULT_EMAIL=admin@example.com
 # PGADMIN_DEFAULT_PASSWORD=admin123
+
+# Place any additional app settings below, e.g. providers, API keys, etc.
+# OPENAI_API_KEY=
+# AWS_ACCESS_KEY_ID=
+# AWS_SECRET_ACCESS_KEY=
 EOF
-    echo "Created minimal .env at $PROJECT_ROOT/deploy/.env"
+    echo "Created minimal .env at $PROJECT_ROOT/deploy/.env with default DATABASE_URL and REDIS_URL"
   fi
 fi
+
+# Ensure .env is owned by the target user for easy editing
+chown "$USER_NAME":"$USER_NAME" "$PROJECT_ROOT/deploy/.env" || true
 
 echo "Building and starting the stack..."
 pushd "$PROJECT_ROOT/deploy" >/dev/null

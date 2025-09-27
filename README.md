@@ -132,3 +132,21 @@ huggingface-cli login  # paste your token
 
 ## License
 MIT License – see [LICENSE](LICENSE).
+
+## Production deployment (images you can pull)
+
+CI/CD (recommended):
+
+- Add GitHub secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN
+- Push to main/master to trigger `.github/workflows/docker-publish.yml`
+- Image will be published as `${DOCKERHUB_USERNAME}/transcript-app:latest` (plus branch/SHA tags)
+
+Server steps:
+
+- Copy `deploy/` to the server under `/srv/transcript`
+- Set `deploy/.env` IMAGE to your published image (e.g., `youruser/transcript-app:latest`)
+- Run `sudo bash deploy/setup_transcript_server.sh`
+
+Manual alternative:
+
+- Use `scripts/build_and_push_image.sh` to build/push locally; override via env: IMAGE_NS, IMAGE_NAME, IMAGE_TAG
