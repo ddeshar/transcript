@@ -27,8 +27,21 @@ services:
       - ../logs:/app/logs
       - ../subtitles:/app/subtitles
       - ../models:/app/models
-    ports:
-      - "80:8000"
+    # Behind Traefik reverse proxy; no direct host port exposure
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.trans.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.trans.entrypoints=websecure"
+      - "traefik.http.routers.trans.tls.certresolver=le"
+      # Optional HTTP->HTTPS redirect
+      - "traefik.http.routers.trans-web.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.trans-web.entrypoints=web"
+      - "traefik.http.routers.trans-web.middlewares=redirect-https"
+      - "traefik.http.middlewares.redirect-https.redirectscheme.scheme=https"
+      # Service port inside the container
+      - "traefik.http.services.trans.loadbalancer.server.port=8000"
+    networks:
+      - proxy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 10s
@@ -116,8 +129,36 @@ services:
       db:
         condition: service_healthy
 
+  # Traefik reverse proxy with automatic Let's Encrypt (TLS)
+  traefik:
+    image: traefik:v2.11
+    container_name: transcript-traefik
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.le.acme.email=${TRAEFIK_ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --api.dashboard=false
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/letsencrypt:/letsencrypt
+    networks:
+      - proxy
+
 volumes:
   db_data:
   redis_data:
   pgadmin_data:
   portainer_data:
+
+networks:
+  proxy:
+    driver: bridge

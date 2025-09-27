@@ -1326,11 +1326,47 @@
       }
     }
 
+    // Ensure mediaDevices.getUserMedia is available and in a secure context
+    function ensureMediaSupport() {
+      // Must be served over HTTPS (or localhost) for getUserMedia
+      if (!window.isSecureContext) {
+        try { updateStatus('Microphone blocked: open over HTTPS (or localhost).', 'status-error'); } catch (e) {}
+        console.warn('getUserMedia requires a secure context (HTTPS).');
+        alert('Microphone access requires HTTPS. Please open this page via https://<your-domain> or set up TLS.');
+        return false;
+      }
+
+      // Polyfill legacy getUserMedia if possible
+      if (!navigator.mediaDevices) {
+        navigator.mediaDevices = {};
+      }
+      if (!navigator.mediaDevices.getUserMedia) {
+        const legacy = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+        if (legacy) {
+          navigator.mediaDevices.getUserMedia = function (constraints) {
+            return new Promise((resolve, reject) => legacy.call(navigator, constraints, resolve, reject));
+          };
+        }
+      }
+
+      if (!navigator.mediaDevices.getUserMedia) {
+        try { updateStatus('Microphone API not available in this browser.', 'status-error'); } catch (e) {}
+        console.warn('mediaDevices.getUserMedia is not available.');
+        return false;
+      }
+      return true;
+    }
+
     async function startLiveSession() {
       try {
         elements.startBtn.disabled = true;
         updateStatus('Starting session...', 'status-transcribing');
         
+        if (!ensureMediaSupport()) {
+          elements.startBtn.disabled = false;
+          return;
+        }
+
         // Request microphone access
         mediaStream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
@@ -1731,6 +1767,10 @@
     // Check microphone access
     async function checkMicrophoneAccess() {
       try {
+        if (!ensureMediaSupport()) {
+          updateAudioStatus('mic', 'Microphone: Not available (use HTTPS)', false);
+          return false;
+        }
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         updateAudioStatus('mic', 'Microphone: Connected', true);
         stream.getTracks().forEach(track => track.stop()); // Clean up
