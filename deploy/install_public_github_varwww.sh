@@ -42,13 +42,14 @@ mkdir -p /var/www
 chown -R "$USER_NAME":"$USER_NAME" /var/www
 
 echo "[4/7] Cloning public repository..."
+# Always check and clean up if directory exists but isn't a git repo
+if [[ -d "$PROJECT_ROOT" && ! -d "$PROJECT_ROOT/.git" ]]; then
+  echo "Removing existing non-git directory at $PROJECT_ROOT"
+  rm -rf "$PROJECT_ROOT"
+fi
+
 if [[ ! -d "$PROJECT_ROOT/.git" ]]; then
   echo "Cloning https://github.com/${REPO_SLUG}.git (branch: $BRANCH)"
-  # Remove any existing non-git directory at the target location
-  if [[ -d "$PROJECT_ROOT" && ! -d "$PROJECT_ROOT/.git" ]]; then
-    echo "Removing existing non-git directory at $PROJECT_ROOT"
-    rm -rf "$PROJECT_ROOT"
-  fi
   sudo -u "$USER_NAME" git clone --branch "$BRANCH" --depth 1 \
     "https://github.com/${REPO_SLUG}.git" "$PROJECT_ROOT"
 else
