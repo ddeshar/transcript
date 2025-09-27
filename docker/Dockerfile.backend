@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 COPY backend /app/backend
 COPY frontend /app/frontend
 COPY scripts /app/scripts
-COPY models /app/models
+RUN mkdir -p /app/models
 COPY sample_audio /app/sample_audio
 COPY README.md /app/README.md
 

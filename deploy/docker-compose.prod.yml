@@ -1,0 +1,125 @@
+version: "3.8"
+
+# Production stack for Transcript app (app + Postgres + Redis + optional pgAdmin)
+# - Uses prebuilt images (change image names to yours)
+# - Persists all data under /srv/transcript on the host
+# - Exposes only the app port by default
+
+services:
+  app:
+    # Build from local source on the server (recommended when pushing code to Git and pulling there)
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    # Optionally tag the built image with a name (keeps compatibility if you also want to push/pull later)
+    image: ${IMAGE:-transcript-app:local}
+    container_name: transcript-app
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      # Sensible server defaults; override via .env when needed
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: /app
+      AUDIO_STORAGE_PATH: /app/media/audio
+      LOG_DIR: /app/logs
+      SUBTITLE_DIR: /app/subtitles
+    volumes:
+      - ../media:/app/media
+      - ../logs:/app/logs
+      - ../subtitles:/app/subtitles
+      - ../models:/app/models
+    ports:
+      - "80:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 6g
+        reservations:
+          cpus: "1.0"
+          memory: 3g
+
+  # Portainer for Docker management (optional; secure access with SG/Firewall)
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: transcript-portainer
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # HTTP UI (disable in prod or restrict)
+      - "9443:9443"   # HTTPS UI (preferred)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+
+  db:
+    image: postgres:15-alpine
+    container_name: transcript-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-seminar_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-seminar_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-seminar_pass}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ../scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    # Do NOT publish 5432 in production unless you really need remote DB access
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-seminar_user} -d ${POSTGRES_DB:-seminar_platform}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: transcript-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Optional: pgAdmin for DB inspection (expose only if needed)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: transcript-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin123}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ../scripts/servers.json:/pgadmin4/servers.json:ro
+    # Publish only if you need it and restrict via SG/firewall
+    # ports:
+    #   - "5050:80"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:
+  redis_data:
+  pgadmin_data:
+  portainer_data:
