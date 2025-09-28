@@ -32,6 +32,7 @@ class WhisperAPIStream(ASRStream):
         self._queue: asyncio.Queue[Optional[ASRResult]] = asyncio.Queue()
         self._running = False
         self._seq = 0
+        self._lock = asyncio.Lock()
 
     async def push_audio(self, chunk: bytes, timestamp_ms: int) -> None:
         self._buffer.extend(chunk)

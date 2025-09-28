@@ -342,8 +342,9 @@ async def synthesize_thai_audio(
                     await TTS_PROVIDER_INSTANCE.cleanup()
                 except:
                     pass
-            # Create new provider
-            TTS_PROVIDER_INSTANCE = create_tts_provider(tts_provider_name)
+            # Create new provider with environment settings
+            env_settings = dict(os.environ)
+            TTS_PROVIDER_INSTANCE = create_tts_provider(tts_provider_name, env_settings)
             TTS_PROVIDER_INSTANCE.name = tts_provider_name  # Track provider type
             await TTS_PROVIDER_INSTANCE.setup()
         tts_provider = TTS_PROVIDER_INSTANCE

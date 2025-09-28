@@ -178,12 +178,28 @@ def create_tts_provider(provider_name: str, settings=None) -> TTSProvider:
     """
     Factory function to create TTS provider instances
     """
+    if settings is None:
+        settings = {}
+        
     if provider_name == "openai":
-        return OpenAITTSProvider()
+        return OpenAITTSProvider(
+            api_key=settings.get("OPENAI_API_KEY"),
+            model=settings.get("OPENAI_TTS_MODEL", "tts-1"),
+            voice=settings.get("OPENAI_TTS_VOICE", "nova"),
+            speed=settings.get("OPENAI_TTS_SPEED", "1.0")
+        )
     elif provider_name == "aws_polly":
-        return AWSPollyTTSProvider()
+        return AWSPollyTTSProvider(
+            region_name=settings.get("AWS_REGION"),
+            aws_access_key_id=settings.get("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=settings.get("AWS_SECRET_ACCESS_KEY"),
+            voice_id=settings.get("AWS_POLLY_VOICE_ID", "Joanna")
+        )
     elif provider_name == "google":
-        return GoogleTTSProvider()
+        return GoogleTTSProvider(
+            credentials_path=settings.get("GOOGLE_APPLICATION_CREDENTIALS"),
+            project_id=settings.get("GCP_PROJECT")
+        )
     elif provider_name == "mock":
         return MockTTSProvider()
     else:

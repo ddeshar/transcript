@@ -19,7 +19,9 @@ class OpenAITTSProvider(TTSProvider):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.api_key = kwargs.get('api_key') or os.getenv('OPENAI_API_KEY')
-        self.model = kwargs.get('model', 'tts-1')  # tts-1 or tts-1-hd
+        self.model = kwargs.get('model') or os.getenv('OPENAI_TTS_MODEL', 'tts-1')
+        self.default_voice = kwargs.get('voice') or os.getenv('OPENAI_TTS_VOICE', 'nova')
+        self.default_speed = float(kwargs.get('speed', os.getenv('OPENAI_TTS_SPEED', '1.0')))
         self.base_url = "https://api.openai.com/v1/audio/speech"
         self.session: Optional[aiohttp.ClientSession] = None
         
