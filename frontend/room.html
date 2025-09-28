@@ -124,7 +124,7 @@
       display: grid;
       grid-template-columns: 350px 1fr;
       gap: 1rem;
-      padding: 1rem 2rem 120px 2rem; /* Added bottom padding for timeline controls */
+      padding: 1rem 2rem; /* Removed bottom padding since timeline controls are hidden */
       max-width: 1400px;
       margin: 0 auto;
       width: 100%;
@@ -640,26 +640,86 @@
     @media (max-width: 768px) {
       .main-content {
         grid-template-columns: 1fr;
-        gap: 1rem;
-        padding: 1rem 1rem 70px 1rem; /* Reduced bottom padding for mobile */
+        gap: 0.5rem;
+        padding: 0.5rem 0.5rem 70px 0.5rem; /* Reduced padding for more space */
       }
       
       .sidebar {
         order: 1;
+        /* Collapse sidebar to minimal height on mobile */
+        max-height: 30vh;
+        overflow-y: auto;
       }
       
       .subtitle-area {
         order: 0;
-        height: 50vh;
+        /* Make subtitle area much larger on mobile - nearly full screen */
+        height: 65vh;
+        margin-bottom: 1rem;
+      }
+      
+      /* Make current subtitle much more prominent on mobile */
+      .current-subtitle {
+        padding: 1.5rem 1rem;
+        min-height: 150px;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+      }
+      
+      .current-thai {
+        font-size: calc(var(--thai-font-size, 1.5rem) * 1.4); /* Bigger Thai text on mobile */
+        margin-bottom: 1rem;
+        line-height: 1.3;
+      }
+      
+      .current-english {
+        font-size: calc(var(--english-font-size, 1.1rem) * 1.2); /* Bigger English text on mobile */
+        line-height: 1.4;
+      }
+      
+      /* Better mobile history section */
+      .subtitle-history {
+        padding: 0.75rem 1rem;
+      }
+      
+      .history-item {
+        padding: 0.75rem 0;
+        margin: 0 -0.5rem;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+      }
+      
+      .history-thai {
+        font-size: calc(var(--font-size-history) * 1.1);
+        margin-bottom: 0.4rem;
+      }
+      
+      .history-english {
+        font-size: calc(var(--font-size-history) * 0.95);
       }
       
       .header-content {
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
       }
       
       .room-info {
         order: 1;
+      }
+      
+      /* Improve header actions for mobile */
+      .header-actions {
+        flex-direction: column;
+        gap: 0.5rem;
+        width: 100%;
+      }
+      
+      .search-container {
+        width: 100%;
+      }
+      
+      .search-input {
+        width: 100%;
       }
     }
 
@@ -1180,47 +1240,164 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
-    /* Responsive Design */
+    /* Mobile Responsive Design */
     @media (max-width: 768px) {
       .room-container {
-        padding: 10px;
+        padding: 5px;
       }
       
       .control-panel {
         grid-template-columns: 1fr;
-        gap: 16px;
-        padding: 16px;
+        gap: 12px;
+        padding: 12px;
       }
       
       .language-switch {
-        flex-direction: column;
+        flex-direction: row;
+        gap: 0.5rem;
       }
       
       .language-btn {
         min-width: auto;
-        width: 100%;
+        flex: 1;
+        padding: 10px 16px;
+        font-size: 0.9rem;
       }
       
       .subtitle-controls {
-        gap: 8px;
+        gap: 6px;
       }
       
+      /* Hide timeline controls completely on mobile since they're disabled */
       .timeline-controls {
-        padding: 12px 16px;
-        /* Auto-minimize on mobile for better UX */
-        transform: translateY(calc(100% - 50px));
+        display: none;
       }
       
-      .timeline-controls:hover,
-      .timeline-controls.expanded {
-        transform: translateY(0);
+      /* Optimize sidebar sections for mobile */
+      .section {
+        padding: 0.75rem;
+        margin-bottom: 0.5rem;
+      }
+      
+      .section-title {
+        font-size: 0.9rem;
+        margin-bottom: 0.75rem;
+      }
+      
+      /* Better mobile font controls */
+      .font-size-control {
+        gap: 0.75rem;
+      }
+      
+      .font-size-label {
+        font-size: 0.8rem;
+      }
+      
+      /* Mobile fullscreen optimizations */
+      .subtitle-area.fullscreen .current-subtitle {
+        padding: 2rem 1rem;
+        min-height: 50vh;
+      }
+      
+      .subtitle-area.fullscreen .current-thai {
+        font-size: calc(var(--thai-font-size, 1.5rem) * 2.2);
+        margin-bottom: 1.5rem;
+      }
+      
+      .subtitle-area.fullscreen .current-english {
+        font-size: calc(var(--english-font-size, 1.1rem) * 2);
       }
       
       .timeline-section {
         padding: 12px 16px 8px;
       }
+    }
+    
+    /* Extra small screens (phones in portrait) */
+    @media (max-width: 480px) {
+      .main-content {
+        padding: 0.25rem 0.25rem 60px 0.25rem;
+        gap: 0.25rem;
+      }
       
-      .timeline-header {
+      .subtitle-area {
+        height: 70vh; /* Even bigger on very small screens */
+        border-radius: 12px;
+      }
+      
+      .current-subtitle {
+        padding: 1rem 0.75rem;
+        min-height: 120px;
+      }
+      
+      .current-thai {
+        font-size: calc(var(--thai-font-size, 1.5rem) * 1.6);
+        margin-bottom: 0.75rem;
+      }
+      
+      .current-english {
+        font-size: calc(var(--english-font-size, 1.1rem) * 1.3);
+      }
+      
+      .sidebar {
+        max-height: 25vh;
+      }
+      
+      .section {
+        padding: 0.5rem;
+        margin-bottom: 0.25rem;
+      }
+      
+      .subtitle-header {
+        padding: 0.75rem 1rem;
+      }
+      
+      .subtitle-title {
+        font-size: 0.9rem;
+      }
+      
+      .header-actions {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+      }
+      
+      .search-input {
+        width: 120px;
+        font-size: 0.8rem;
+      }
+      
+      .font-controls {
+        padding: 0.2rem 0.4rem;
+      }
+      
+      .btn-sm {
+        padding: 0.2rem 0.4rem;
+        font-size: 0.7rem;
+      }
+    }
+    
+    /* Mobile landscape optimization */
+    @media (max-width: 768px) and (orientation: landscape) {
+      .subtitle-area {
+        height: 80vh; /* Maximize subtitle area in landscape */
+      }
+      
+      .sidebar {
+        max-height: 15vh; /* Minimize sidebar in landscape */
+      }
+      
+      .current-subtitle {
+        min-height: 100px;
+        padding: 1rem;
+      }
+      
+      .main-content {
+        gap: 0.25rem;
+      }
+    }
+      
+    .timeline-header {
         padding: 6px 16px;
       }
       
@@ -1471,8 +1648,8 @@
     <div class="subtitle-text subtitle-english" id="englishSubtitle" style="display: none;"></div>
   </div>
 
-  <!-- Enhanced Timeline Controls -->
-  <div class="timeline-controls" id="timelineControls">
+  <!-- Enhanced Timeline Controls - TEMPORARILY HIDDEN -->
+  <div class="timeline-controls" id="timelineControls" style="display: none;">
     <div class="timeline-header">
       <div class="timeline-title">
         <i class="fas fa-play-circle"></i>
@@ -1732,6 +1909,11 @@
     }
 
     function setupTimelineControls() {
+      // Skip if timeline controls are hidden
+      if (!elements.timelineControls || elements.timelineControls.style.display === 'none') {
+        return;
+      }
+      
       if (elements.timelineMinimize && elements.timelineControls) {
         let isMinimized = false;
         
@@ -3202,6 +3384,12 @@
     }
 
     function initializeTimelineWithAudio() {
+      // Skip if timeline controls are hidden
+      if (!elements.timelineControls || elements.timelineControls.style.display === 'none') {
+        console.log('Timeline initialization skipped - controls are hidden');
+        return;
+      }
+      
       // Set up timeline for audio scrubbing
       console.log('Timeline initialized with audio scrubbing support');
       console.log('Current audio language:', currentAudioLanguage);
