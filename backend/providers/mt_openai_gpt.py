@@ -18,11 +18,17 @@ class OpenAIGPTProvider(MTProvider):
         self,
         api_key: Optional[str] = None,
         model: str = "gpt-3.5-turbo",
-        temperature: float = 0.3
+        temperature: float = 0.1,
+        max_tokens: int = 80,
+        frequency_penalty: float = 0.1,
+        presence_penalty: float = 0.0
     ) -> None:
         self.api_key = api_key
         self.model = model
         self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.frequency_penalty = frequency_penalty
+        self.presence_penalty = presence_penalty
         self._client: Optional[AsyncOpenAI] = None
 
     async def setup(self) -> None:
@@ -81,15 +87,23 @@ class OpenAIGPTProvider(MTProvider):
             raise RuntimeError("OpenAIGPTProvider.setup() must be awaited before use.")
         
         try:
-            # Create a focused translation prompt
-            system_prompt = """You are a professional English-to-Thai translator. 
-Translate the given English text to natural, fluent Thai. 
-- Maintain the original meaning and tone
-- Use appropriate Thai formality level
-- For conversational speech, use natural Thai expressions
-- Only return the Thai translation, nothing else"""
+            # Create a focused translation prompt that reduces redundant politeness markers
+            system_prompt = """You are a professional English-to-Thai translator for real-time subtitles.
 
-            user_prompt = f"Translate to Thai: {text}"
+Rules:
+1. Translate naturally and accurately - do NOT add extra politeness markers
+2. Only add ครับ/ค่ะ if it's clearly implied in the original English tone
+3. For casual conversation, use informal Thai without forcing politeness
+4. For formal speech, use appropriate level but don't over-polite
+5. Translate short phrases simply - don't elaborate
+6. Return ONLY the Thai translation, no explanations
+
+Examples:
+"This is a test" → "นี่คือการทดสอบ" (NOT "นี่คือการทดสอบค่ะ/ครับ")
+"Thank you" → "ขอบคุณ" (NOT "ขอบคุณครับ/ค่ะ" unless clearly formal)
+"Let's go" → "ไปกันเถอะ" (NOT "ไปกันเถอะค่ะ/ครับ")"""
+
+            user_prompt = f"{text}"
             
             response = await self._client.chat.completions.create(
                 model=self.model,
@@ -97,9 +111,12 @@ Translate the given English text to natural, fluent Thai.
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                max_tokens=100,  # Reduced for faster response
+                max_tokens=self.max_tokens,
                 temperature=self.temperature,
-                stream=False  # Ensure no streaming for faster completion
+                top_p=0.9,
+                frequency_penalty=self.frequency_penalty,
+                presence_penalty=self.presence_penalty,
+                stream=False
             )
             
             thai_text = response.choices[0].message.content.strip()
@@ -107,6 +124,20 @@ Translate the given English text to natural, fluent Thai.
             # Remove any extra formatting or quotes that might be added
             if thai_text.startswith('"') and thai_text.endswith('"'):
                 thai_text = thai_text[1:-1]
+            
+            # Clean up common redundant patterns
+            # Remove excessive politeness markers that weren't in original English
+            import re
+            
+            # If original text is very short and casual, remove automatic politeness
+            if len(text.split()) <= 3 and text.lower() in ['yes', 'yep', 'yeah', 'ok', 'okay', 'bye', 'hi', 'hello']:
+                thai_text = re.sub(r'ค่ะ/ครับ$|ครับ/ค่ะ$|ค่ะ$|ครับ$', '', thai_text).strip()
+            
+            # Remove trailing dots that add formality
+            thai_text = thai_text.rstrip('.')
+            
+            # Remove duplicate politeness markers
+            thai_text = re.sub(r'(ค่ะ/ครับ|ครับ/ค่ะ)\s*(ค่ะ/ครับ|ครับ/ค่ะ)', r'\1', thai_text)
             
             return MTResult(
                 text=thai_text,

@@ -13,15 +13,25 @@ from ..utils import to_thread
 
 
 class WhisperAPIStream(ASRStream):
-    def __init__(self, session_id: str, client: AsyncOpenAI, model: str, sample_rate: int) -> None:
+    def __init__(
+        self, 
+        session_id: str, 
+        client: AsyncOpenAI, 
+        model: str, 
+        sample_rate: int,
+        temperature: float = 0.0,
+        prompt: Optional[str] = None
+    ) -> None:
         self.session_id = session_id
         self.client = client
         self.model = model
         self.sample_rate = sample_rate
-        self._buffer = bytearray()
+        self.temperature = temperature
+        self.prompt = prompt
+        self._buffer: bytearray = bytearray()
         self._queue: asyncio.Queue[Optional[ASRResult]] = asyncio.Queue()
+        self._running = False
         self._seq = 0
-        self._lock = asyncio.Lock()
 
     async def push_audio(self, chunk: bytes, timestamp_ms: int) -> None:
         self._buffer.extend(chunk)
@@ -49,21 +59,49 @@ class WhisperAPIStream(ASRStream):
         wav_file.content_type = "audio/wav"
         # Ensure file pointer is at the beginning
         wav_file.seek(0)
-        response = await self.client.audio.transcriptions.create(
-            model=self.model,
-            file=wav_file,
-            language="en",
-            response_format="json",
-        )
+        # Prepare API parameters
+        api_params = {
+            "model": self.model,
+            "file": wav_file,
+            "language": "en",
+            "response_format": "json",
+            "temperature": self.temperature
+        }
+        
+        # Add prompt if provided
+        if self.prompt:
+            api_params["prompt"] = self.prompt
+            
+        response = await self.client.audio.transcriptions.create(**api_params)
         text = (response.get("text") if isinstance(response, dict) else getattr(response, "text", "")) or ""
         text = text.strip()
+        
+        # Filter out common hallucinations and artifacts
+        import re
+        
+        # Filter out common hallucinated sounds and artifacts
+        hallucination_patterns = [
+            r'^(uh|um|mm|hmm|pfft|huh|mhm)$',  # Common sound artifacts
+            r'^[.,!?\s]*$',  # Only punctuation
+            r'^(bye|hi)\.$',  # Single words with periods (often hallucinated)
+            r'disclaimer|sites\.google\.com',  # Known disclaimer artifacts
+            r'^[a-zA-Z]$',  # Single letters (often hallucinated)
+            r'^(the|a|an|to|and|or|but)$'  # Common single words that are often hallucinated
+        ]
+        
+        for pattern in hallucination_patterns:
+            if re.match(pattern, text.lower()):
+                import logging
+                logging.info(f"Filtered out potential hallucination: '{text}'")
+                return
         
         # DEBUG: Log suspicious disclaimer content
         if "disclaimer" in text.lower() or "sites.google.com" in text.lower():
             import logging
             logging.warning(f"[DEBUG] Disclaimer detected from OpenAI: '{text}' - Audio size: {len(wav_bytes)} bytes")
+            return  # Skip this entirely
         
-        if not text:
+        if not text or len(text.strip()) < 2:  # Skip very short content
             return
         self._seq += 1
         # Use session_id + timestamp for unique segment IDs to prevent duplicates
@@ -103,9 +141,17 @@ class WhisperAPIStream(ASRStream):
 class WhisperCloudASRProvider(ASRProvider):
     name = "whisper_api"
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "whisper-1") -> None:
+    def __init__(
+        self, 
+        api_key: Optional[str] = None, 
+        model: str = "whisper-1",
+        temperature: float = 0.0,
+        prompt: Optional[str] = None
+    ) -> None:
         self.api_key = api_key
         self.model = model
+        self.temperature = temperature
+        self.prompt = prompt
         self._client: Optional[AsyncOpenAI] = None
 
     async def setup(self) -> None:
@@ -121,7 +167,14 @@ class WhisperCloudASRProvider(ASRProvider):
     async def create_stream(self, session_id: str, sample_rate: int) -> ASRStream:
         if self._client is None:
             raise RuntimeError("WhisperCloudASRProvider.setup() must be awaited before use.")
-        return WhisperAPIStream(session_id=session_id, client=self._client, model=self.model, sample_rate=sample_rate)
+        return WhisperAPIStream(
+            session_id=session_id, 
+            client=self._client, 
+            model=self.model, 
+            sample_rate=sample_rate,
+            temperature=self.temperature,
+            prompt=self.prompt
+        )
 
 
 __all__ = ["WhisperCloudASRProvider"]

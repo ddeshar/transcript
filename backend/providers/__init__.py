@@ -96,6 +96,8 @@ def create_asr_provider(
         return WhisperCloudASRProvider(
             api_key=settings.get("OPENAI_API_KEY"),
             model=settings.get("OPENAI_WHISPER_MODEL", "whisper-1"),
+            temperature=float(settings.get("OPENAI_WHISPER_TEMPERATURE", "0.0")),
+            prompt=settings.get("OPENAI_WHISPER_PROMPT")
         )
     if name == "gpt_realtime":
         return GPTRealtimeProvider(
@@ -161,7 +163,11 @@ def create_mt_provider(
     if name == "openai_gpt":
         return OpenAIGPTProvider(
             api_key=settings.get("OPENAI_API_KEY"),
-            model=settings.get("OPENAI_GPT_MODEL", "gpt-3.5-turbo")
+            model=settings.get("OPENAI_GPT_MODEL", "gpt-3.5-turbo"),
+            temperature=float(settings.get("OPENAI_GPT_TEMPERATURE", "0.1")),
+            max_tokens=int(settings.get("OPENAI_GPT_MAX_TOKENS", "80")),
+            frequency_penalty=float(settings.get("OPENAI_GPT_FREQUENCY_PENALTY", "0.1")),
+            presence_penalty=float(settings.get("OPENAI_GPT_PRESENCE_PENALTY", "0.0"))
         )
     if name == "simple_thai":
         return SimpleThaiProvider()
