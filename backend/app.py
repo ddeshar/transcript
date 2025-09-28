@@ -434,8 +434,12 @@ async def synthesize_thai_audio_base64(thai_text: str) -> Optional[str]:
         # Synthesize speech
         result = await tts_provider.synthesize(tts_request)
         
-        if result.success and result.audio_data:
+        if result and hasattr(result, 'success') and result.success and result.audio_data:
             # Return audio as base64
+            audio_base64 = base64.b64encode(result.audio_data).decode()
+            return audio_base64
+        elif result and hasattr(result, 'audio_data') and result.audio_data:
+            # Handle direct audio data return
             audio_base64 = base64.b64encode(result.audio_data).decode()
             return audio_base64
         else:
@@ -485,10 +489,12 @@ async def synthesize_english_audio_base64(english_text: str) -> Optional[str]:
         )
         
         # Synthesize audio
-        audio_data = await tts_provider.synthesize(tts_request)
-        if audio_data:
+        result = await tts_provider.synthesize(tts_request)
+        if result and hasattr(result, 'audio_data') and result.audio_data:
             # Convert to base64
-            return base64.b64encode(audio_data).decode('utf-8')
+            return base64.b64encode(result.audio_data).decode('utf-8')
+        elif result and hasattr(result, 'success') and result.success and result.audio_data:
+            return base64.b64encode(result.audio_data).decode('utf-8')
         else:
             return None
             
@@ -2391,11 +2397,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                 )
                                 
                                 if thai_audio_saved:
+                                    # Create unique segment ID with timestamp to prevent duplicates
+                                    import time
+                                    unique_audio_id = f"{sess_id}-{int(time.time() * 1000)}-{segment_id}"
+                                    
                                     # Save Thai audio metadata to database
                                     await (
                                         AsyncDatabaseService.save_audio_segment(
                                             room_id=state.room_id,
-                                            segment_id=f"{sess_id}-{segment_id}",
+                                            segment_id=unique_audio_id,
                                             timestamp_ms=message.get(
                                                 "timestamp_ms", 0
                                             ),
@@ -2568,10 +2578,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         chunk, audio_file_path, state.sample_rate
                     )
                     
+                    # Create unique segment ID with timestamp to prevent duplicates
+                    import time
+                    unique_audio_id = f"{sess_id}-{int(time.time() * 1000)}-{segment_id}"
+                    
                     # Save metadata to database with file path
                     await AsyncDatabaseService.save_audio_segment(
                         room_id=state.room_id,
-                        segment_id=f"{sess_id}-{segment_id}",
+                        segment_id=unique_audio_id,
                         timestamp_ms=timestamp,
                         duration_ms=(len(chunk) * 1000 //
                                      (state.sample_rate * 2)),
