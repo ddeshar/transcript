@@ -332,9 +332,21 @@ async def synthesize_thai_audio(
                 file_path, 2000, sample_rate
             )
         
-        # Create TTS provider
-        tts_provider = create_tts_provider(tts_provider_name)
-        await tts_provider.setup()
+        # Get or create singleton TTS provider to prevent session leaks
+        global TTS_PROVIDER_INSTANCE
+        if (TTS_PROVIDER_INSTANCE is None or 
+            getattr(TTS_PROVIDER_INSTANCE, 'name', None) != tts_provider_name):
+            # Cleanup old provider if exists
+            if TTS_PROVIDER_INSTANCE is not None:
+                try:
+                    await TTS_PROVIDER_INSTANCE.cleanup()
+                except:
+                    pass
+            # Create new provider
+            TTS_PROVIDER_INSTANCE = create_tts_provider(tts_provider_name)
+            TTS_PROVIDER_INSTANCE.name = tts_provider_name  # Track provider type
+            await TTS_PROVIDER_INSTANCE.setup()
+        tts_provider = TTS_PROVIDER_INSTANCE
         
         # Configure Thai voice based on provider
         voice_id = "alloy"  # Default fallback
@@ -414,9 +426,21 @@ async def synthesize_thai_audio_base64(thai_text: str) -> Optional[str]:
         if tts_provider_name in ["disabled", "mock"]:
             return None
         
-        # Create TTS provider
-        tts_provider = create_tts_provider(tts_provider_name)
-        await tts_provider.setup()
+        # Get or create singleton TTS provider to prevent session leaks
+        global TTS_PROVIDER_INSTANCE
+        if (TTS_PROVIDER_INSTANCE is None or 
+            getattr(TTS_PROVIDER_INSTANCE, 'name', None) != tts_provider_name):
+            # Cleanup old provider if exists
+            if TTS_PROVIDER_INSTANCE is not None:
+                try:
+                    await TTS_PROVIDER_INSTANCE.cleanup()
+                except Exception:
+                    pass
+            # Create new provider
+            TTS_PROVIDER_INSTANCE = create_tts_provider(tts_provider_name)
+            TTS_PROVIDER_INSTANCE.name = tts_provider_name  # Track provider
+            await TTS_PROVIDER_INSTANCE.setup()
+        tts_provider = TTS_PROVIDER_INSTANCE
         
         # Configure voice
         voice_id = "nova"  # Default for streaming
@@ -471,9 +495,21 @@ async def synthesize_english_audio_base64(english_text: str) -> Optional[str]:
         if tts_provider_name in ["disabled", "mock"]:
             return None
         
-        # Create TTS provider
-        tts_provider = create_tts_provider(tts_provider_name)
-        await tts_provider.setup()
+        # Get or create singleton TTS provider to prevent session leaks
+        global TTS_PROVIDER_INSTANCE
+        if (TTS_PROVIDER_INSTANCE is None or 
+            getattr(TTS_PROVIDER_INSTANCE, 'name', None) != tts_provider_name):
+            # Cleanup old provider if exists
+            if TTS_PROVIDER_INSTANCE is not None:
+                try:
+                    await TTS_PROVIDER_INSTANCE.cleanup()
+                except Exception:
+                    pass
+            # Create new provider
+            TTS_PROVIDER_INSTANCE = create_tts_provider(tts_provider_name)
+            TTS_PROVIDER_INSTANCE.name = tts_provider_name  # Track provider
+            await TTS_PROVIDER_INSTANCE.setup()
+        tts_provider = TTS_PROVIDER_INSTANCE
         
         # Configure voice for English
         voice_id = "alloy"  # Different voice for English
@@ -583,6 +619,9 @@ MT_PROVIDER: MTProvider = create_mt_provider(
     settings=os.environ,
 )
 
+# TTS Provider singleton to prevent HTTP session leaks
+TTS_PROVIDER_INSTANCE = None
+
 # Initialize database on startup
 init_database()
 get_logger().info("Database initialized successfully")
@@ -630,6 +669,18 @@ async def reload_providers() -> None:
 async def startup_event() -> None:
     await ASR_PROVIDER.setup()
     await MT_PROVIDER.setup()
+
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    """Clean up resources on shutdown to prevent session leaks"""
+    global TTS_PROVIDER_INSTANCE
+    if TTS_PROVIDER_INSTANCE is not None:
+        try:
+            await TTS_PROVIDER_INSTANCE.cleanup()
+            TTS_PROVIDER_INSTANCE = None
+        except Exception:
+            pass
 
 
 # ===== AUTHENTICATION ENDPOINTS =====
