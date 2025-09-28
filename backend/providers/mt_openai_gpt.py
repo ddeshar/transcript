@@ -82,6 +82,22 @@ class OpenAIGPTProvider(MTProvider):
         """Translate English text to Thai using OpenAI GPT"""
         if not text.strip():
             return MTResult(text="", provider=self.name, is_final=is_final)
+            
+        # Skip translation of fragments that are too short or meaningless
+        words = text.split()
+        if len(words) < 2:
+            # Return empty for single words unless they're complete thoughts
+            complete_words = ['yes', 'no', 'okay', 'thanks', 'hello',
+                              'hi', 'bye', 'stop', 'start', 'help']
+            if text.lower().strip() not in complete_words:
+                return MTResult(text="", provider=self.name, is_final=is_final)
+
+        # Skip meaningless connecting words and fragments
+        connecting_words = ['in', 'at', 'to', 'the', 'and', 'or', 'but',
+                            'with', 'for', 'on']
+        if (len(words) <= 2 and
+                any(word.lower() in connecting_words for word in words)):
+            return MTResult(text="", provider=self.name, is_final=is_final)
         
         if self._client is None:
             raise RuntimeError("OpenAIGPTProvider.setup() must be awaited before use.")

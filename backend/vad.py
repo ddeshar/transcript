@@ -20,8 +20,8 @@ class VoiceActivityDetector:
         self,
         sample_rate: int = 16000,
         frame_duration_ms: int = 30,
-        padding_duration_ms: int = 1500,  # 1.5s to prevent brief pause stops
-        aggressiveness: int = 1,  # Less aggressive silence detection
+        padding_duration_ms: int = 2500,  # 2.5s to prevent fragmentation
+        aggressiveness: int = 0,  # Minimal aggressiveness for natural speech
     ) -> None:
         if frame_duration_ms not in (10, 20, 30):
             raise ValueError("frame_duration_ms must be 10, 20, or 30")

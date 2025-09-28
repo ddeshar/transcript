@@ -52,6 +52,15 @@ class WhisperAPIStream(ASRStream):
             self._buffer.clear()
         if not payload:
             return
+        
+        # Check minimum audio duration to prevent tiny fragments
+        # 16kHz, 16-bit = 32000 bytes per second
+        audio_duration_ms = (len(payload) / 32)  # bytes to ms conversion
+        min_duration_ms = 2000  # 2 seconds minimum
+        if audio_duration_ms < min_duration_ms:
+            import logging
+            logging.info(f"Skipped short audio: {audio_duration_ms:.0f}ms")
+            return
         wav_bytes = await to_thread(self._pcm16_to_wav, payload)
         # Create a proper file-like object with all necessary attributes for OpenAI API
         wav_file = io.BytesIO(wav_bytes)
@@ -108,8 +117,25 @@ class WhisperAPIStream(ASRStream):
             logging.warning(f"[DEBUG] Disclaimer detected from OpenAI: '{text}' - Audio size: {len(wav_bytes)} bytes")
             return  # Skip this entirely
         
-        if not text or len(text.strip()) < 2:  # Skip very short content
+        # Enhanced content filtering
+        if not text or len(text.strip()) < 3:  # Skip very short content
             return
+            
+        # Filter fragments that are likely meaningless
+        words = text.split()
+        if len(words) < 2:  # Require at least 2 words
+            import logging
+            logging.info(f"Filtered single word fragment: '{text}'")
+            return
+            
+        # Filter very short phrases that are likely fragments
+        if len(words) <= 3 and len(text) < 10:  # Very short phrases
+            fragments = ['in', 'at', 'to', 'the', 'and', 'or', 'but',
+                         'with', 'for', 'on']
+            if any(word.lower() in fragments for word in words):
+                import logging
+                logging.info(f"Filtered meaningless fragment: '{text}'")
+                return
         self._seq += 1
         # Use session_id + timestamp for unique segment IDs to prevent duplicates
         import time
