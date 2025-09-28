@@ -88,20 +88,22 @@ class OpenAIGPTProvider(MTProvider):
         
         try:
             # Create a focused translation prompt that reduces redundant politeness markers
-            system_prompt = """You are a professional English-to-Thai translator for real-time subtitles.
+            system_prompt = """TRANSLATE ONLY. English to Thai. No explanations. No chatbot responses.
 
 Rules:
-1. Translate naturally and accurately - do NOT add extra politeness markers
-2. Only add ครับ/ค่ะ if it's clearly implied in the original English tone
-3. For casual conversation, use informal Thai without forcing politeness
-4. For formal speech, use appropriate level but don't over-polite
-5. Translate short phrases simply - don't elaborate
-6. Return ONLY the Thai translation, no explanations
+1. ONLY translate - never respond as a chatbot
+2. NEVER add automatic ครับ/ค่ะ unless clearly formal context
+3. For casual phrases, use informal Thai
+4. Return ONLY Thai translation, nothing else
+5. If input is nonsensical, return empty string
 
 Examples:
-"This is a test" → "นี่คือการทดสอบ" (NOT "นี่คือการทดสอบค่ะ/ครับ")
-"Thank you" → "ขอบคุณ" (NOT "ขอบคุณครับ/ค่ะ" unless clearly formal)
-"Let's go" → "ไปกันเถอะ" (NOT "ไปกันเถอะค่ะ/ครับ")"""
+"This is a test" → "นี่คือการทดสอบ"
+"Thank you" → "ขอบคุญ" 
+"Let's go" → "ไปกันเถอะ"
+"Okay guys" → "โอเคพวกเรา"
+
+NEVER respond with "I'm sorry" or chatbot messages. ONLY translate."""
 
             user_prompt = f"{text}"
             
@@ -129,15 +131,27 @@ Examples:
             # Remove excessive politeness markers that weren't in original English
             import re
             
-            # If original text is very short and casual, remove automatic politeness
-            if len(text.split()) <= 3 and text.lower() in ['yes', 'yep', 'yeah', 'ok', 'okay', 'bye', 'hi', 'hello']:
-                thai_text = re.sub(r'ค่ะ/ครับ$|ครับ/ค่ะ$|ค่ะ$|ครับ$', '', thai_text).strip()
+            # More aggressive casual phrase detection
+            casual_phrases = ['yes', 'yep', 'yeah', 'ok', 'okay', 'bye', 'hi', 'hello', 
+                            'guys', 'let\'s go', 'this is', 'that is', 'testing', 'test',
+                            'second attempt', 'mark', 'system', 'voice', 'translation']
+            
+            # If original is casual or short, remove automatic politeness
+            is_casual = (len(text.split()) <= 4 or 
+                        any(phrase in text.lower() for phrase in casual_phrases))
+            
+            if is_casual:
+                # Remove all forms of ครับ/ค่ะ from casual contexts
+                thai_text = re.sub(r'ครับ/ค่ะ|ค่ะ/ครับ|ครับ|ค่ะ', '', thai_text).strip()
             
             # Remove trailing dots that add formality
             thai_text = thai_text.rstrip('.')
             
             # Remove duplicate politeness markers
             thai_text = re.sub(r'(ค่ะ/ครับ|ครับ/ค่ะ)\s*(ค่ะ/ครับ|ครับ/ค่ะ)', r'\1', thai_text)
+            
+            # Clean up extra spaces
+            thai_text = ' '.join(thai_text.split())
             
             return MTResult(
                 text=thai_text,

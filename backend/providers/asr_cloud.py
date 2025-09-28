@@ -87,7 +87,13 @@ class WhisperAPIStream(ASRStream):
             r'^(bye|hi)\.$',  # Single words with periods (often hallucinated)
             r'disclaimer|sites\.google\.com',  # Known disclaimer artifacts
             r'^[a-zA-Z]$',  # Single letters (often hallucinated)
-            r'^(the|a|an|to|and|or|but)$'  # Common single words that are often hallucinated
+            r'^(the|a|an|to|and|or|but)$',  # Common single words that are often hallucinated
+            r'ignore.*background.*noise',  # Filter out our own prompt being transcribed!
+            r'transcribe.*clearly.*spoken',  # Filter out prompt variations
+            r'non-speech.*sounds',  # Filter out prompt fragments
+            r'translation.*from.*english.*to.*english',  # Filter GPT confusion
+            r"i'm sorry.*only provide.*translation",  # Filter GPT responses
+            r'^hi\.$'  # Single "Hi." often hallucinated
         ]
         
         for pattern in hallucination_patterns:

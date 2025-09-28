@@ -97,7 +97,7 @@ def create_asr_provider(
             api_key=settings.get("OPENAI_API_KEY"),
             model=settings.get("OPENAI_WHISPER_MODEL", "whisper-1"),
             temperature=float(settings.get("OPENAI_WHISPER_TEMPERATURE", "0.0")),
-            prompt=settings.get("OPENAI_WHISPER_PROMPT")
+            prompt=None  # Disable prompt - it was causing hallucinations
         )
     if name == "gpt_realtime":
         return GPTRealtimeProvider(
